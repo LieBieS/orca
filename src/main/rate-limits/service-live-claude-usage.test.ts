@@ -534,4 +534,52 @@ describe('RateLimitService', () => {
       vi.useRealTimers()
     }
   })
+
+  it('keeps the newer weekly value when an idle session re-posts an older one for the same window', async () => {
+    vi.useFakeTimers()
+    try {
+      // OAuth resets carry sub-second precision; the statusline reports whole seconds.
+      const sessionReset = Date.now() + 128 * 60 * 1000 + 123
+      const weeklyReset = Date.now() + 125 * 60 * 60 * 1000 + 456
+      const win = (usedPercent: number, resetsAt: number, windowMinutes: number) => ({
+        usedPercent,
+        windowMinutes,
+        resetsAt,
+        resetDescription: null
+      })
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue({
+        ...okProvider('claude', 10),
+        session: win(10, sessionReset, 300),
+        weekly: win(25, weeklyReset, 10080)
+      })
+      mockFreshBackgroundProviderFetches()
+      const service = new RateLimitService()
+      await service.refresh()
+      const fetched = service.getState().claude
+      const post = (session: number | null, weekly: number, weeklyResetAt = weeklyReset) =>
+        service.ingestLiveClaudeRateLimits({
+          configDir: null,
+          fiveHour:
+            session === null
+              ? null
+              : { used_percentage: session, resets_at: Math.floor(sessionReset / 1000) },
+          sevenDay: { used_percentage: weekly, resets_at: Math.floor(weeklyResetAt / 1000) }
+        })
+
+      // An idle session last saw the API days ago: Claude Code drops its passed 5-hour window but
+      // still reports the current weekly window at the old value. Dropped whole, so the OAuth poll is not deferred.
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      post(null, 8)
+      expect(service.getState().claude).toEqual(fetched)
+
+      post(11, 26)
+      expect(service.getState().claude?.weekly?.usedPercent).toBe(26)
+
+      // A new weekly window's lower value is taken.
+      post(null, 1, weeklyReset + 7 * 24 * 60 * 60 * 1000)
+      expect(service.getState().claude?.weekly?.usedPercent).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
