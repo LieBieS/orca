@@ -281,7 +281,13 @@ it('reports a muted host before a disabled source', () => {
 })
 
 it("tells the phone which server and pane raised it, through the gateway's push", async () => {
-  for (const executionHost of [undefined, 'runtime:qa'] as const) {
+  const cases = [
+    [undefined, `tab-1:${LEAF}`, `tab-1:${LEAF}`],
+    ['runtime:qa', `${toWebTerminalSurfaceTabId('host-tab')}:${LEAF}`, `host-tab:${LEAF}`],
+    // A per-surface mirror tab encodes the server's `tab::leaf` surface id.
+    ['runtime:qa', `${toWebTerminalSurfaceTabId(`host-tab::${LEAF}`)}:${LEAF}`, `host-tab:${LEAF}`]
+  ] as const
+  for (const [executionHost, paneKey, pushedPaneKey] of cases) {
     const push = createPushHarness({
       devices: [{ deviceId: 'phone', pushRegistration: registration() }]
     })
@@ -289,19 +295,11 @@ it("tells the phone which server and pane raised it, through the gateway's push"
     harness.deps.dispatchMobileNotification = (event) =>
       push.dispatcher.enqueue({ ...event, notificationSeq: 1, notificationEpoch: 'epoch' })
     createNotificationDeliveryService(harness.deps).dispatch(
-      makeRequest({
-        agentState: 'done',
-        paneKey: executionHost
-          ? `${toWebTerminalSurfaceTabId('host-tab')}:${LEAF}`
-          : `tab-1:${LEAF}`,
-        ...(executionHost ? { executionHost } : {})
-      })
+      makeRequest({ agentState: 'done', paneKey, ...(executionHost ? { executionHost } : {}) })
     )
     await flush()
     expect(push.sends[0]?.notification.worktreeId).toBe('wt-1')
-    expect(push.sends[0]?.notification.paneKey).toBe(
-      executionHost ? `host-tab:${LEAF}` : `tab-1:${LEAF}`
-    )
+    expect(push.sends[0]?.notification.paneKey).toBe(pushedPaneKey)
     expect(push.sends[0]?.notification.executionHost).toBe(executionHost)
   }
 })
