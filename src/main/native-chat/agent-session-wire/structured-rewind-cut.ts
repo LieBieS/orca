@@ -2,18 +2,13 @@
 // epoch until the rewind completes, so admission and recovery derive the same cut, and the saved
 // rewind record names the target instead of copying the history it keeps.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { isAgentSessionRewindTarget } from '../../../shared/agent-session-rewind'
+import { savedRewindKeys, isAgentSessionRewindTarget } from '../../../shared/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
@@ -44,9 +39,9 @@ export function structuredRewindCut(
   const items = floor
     ? snapshot.items.filter((item) => item.sequence > floor.sequence)
     : snapshot.items
-  const { providerKey, omitted } = submissionKeys(snapshot.submissions)
+  const { providerKey, omitted, nativeIdentity } = savedRewindKeys(snapshot.submissions)
   const selected = items.find((item) => item.itemId === target.itemId)
-  const key = selected ? parseAgentJournalItemKey(providerKey(selected.itemId)) : null
+  const key = selected ? nativeIdentity(selected.itemId) : null
   if (key?.provider === 'claude' && target.provider === 'claude') {
     // Any session the chat ran: a message from before an earlier rewind's fork is still cut there.
     const boundary = items.findIndex((item) => item.itemId === target.itemId)
@@ -139,27 +134,7 @@ function lastListedTurn(
 
 /** The provider's key for a journal row; an accepted message keeps Orca's own until then. */
 export function providerItemIdOf(journal: AgentSessionJournal, itemId: string): string {
-  return submissionKeys(journal.snapshot().submissions).providerKey(itemId)
-}
-
-// Accepted messages keep Orca's key in the journal; the rebuilt epoch has no submission to tie them
-// to, so they take the provider's.
-function submissionKeys(submissions: readonly AgentJournalSubmission[]): {
-  providerKey: (itemId: string) => string
-  /** Messages a rewind never keeps: queued ones survive it on their own, rejected ones never ran. */
-  omitted: ReadonlySet<string>
-} {
-  const providerKeys = new Map<string, string>()
-  const omitted = new Set<string>()
-  for (const submission of submissions) {
-    const key = agentJournalSubmissionKey(submission.clientMessageId)
-    if (isQueuedAgentJournalSubmission(submission) || submission.dispatchState === 'rejected') {
-      omitted.add(key)
-    } else if (submission.dispatchState === 'accepted' && submission.providerItemId) {
-      providerKeys.set(key, submission.providerItemId)
-    }
-  }
-  return { providerKey: (itemId) => providerKeys.get(itemId) ?? itemId, omitted }
+  return savedRewindKeys(journal.snapshot().submissions).providerKey(itemId)
 }
 
 /** The main conversation turn a row belongs to: its own Codex key on the main thread, else the turn

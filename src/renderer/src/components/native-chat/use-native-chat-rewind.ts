@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import {
+  savedRewindKeys,
   isAgentSessionRewindTarget,
   type AgentSessionRewindReason,
   type AgentSessionRewindResult,
@@ -77,12 +78,13 @@ function rewindFailureReason(failure: AgentSessionWriteFailure): string | undefi
 }
 
 function isRewindTarget(input: RewindInput, itemId: string): boolean {
-  const floor = rewindContextFloor(input)
   const opener = turnOpeners(input.state.items)
+  const keys = savedRewindKeys(input.state.submissions)
   return input.state.items.some(
     (item) =>
       item.itemId === itemId &&
-      item.sequence > floor &&
+      item.sequence > rewindContextFloor(input) &&
+      (keys.nativeIdentity(itemId) !== null || !keys.hasSubmission(itemId)) &&
       isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
   )
 }
@@ -299,15 +301,18 @@ export function useNativeChatRewind(input: RewindInput) {
   const floor = rewindContextFloor(input)
   const eligibleItemIds = useMemo(() => {
     const opener = turnOpeners(input.state.items)
+    const keys = savedRewindKeys(input.state.submissions)
     return new Set(
       input.state.items
         .filter(
           (item) =>
-            item.sequence > floor && isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
+            item.sequence > floor &&
+            (keys.nativeIdentity(item.itemId) !== null || !keys.hasSubmission(item.itemId)) &&
+            isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
         )
         .map((item) => item.itemId)
     )
-  }, [floor, input.state.items])
+  }, [floor, input.state.items, input.state.submissions])
   // Rows re-render only when this changes; none get the action where the provider can never rewind.
   const surface = useMemo<NativeChatRewindSurface | undefined>(
     () => (offered ? { disabledReason, request, eligibleItemIds } : undefined),
