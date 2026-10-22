@@ -3606,6 +3606,11 @@
               "invert": "inverter",
               "opposite": "oposto"
             },
+            "linkRoutingBackground": {
+              "background": "segundo plano",
+              "focus": "foco",
+              "tab": "aba"
+            },
             "terminalLinkActions": {
               "terminal": "terminal",
               "chat": "chat",

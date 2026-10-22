@@ -9602,6 +9602,11 @@
               "invert": "invertir",
               "opposite": "opuesto"
             },
+            "linkRoutingBackground": {
+              "background": "segundo plano",
+              "focus": "foco",
+              "tab": "pestaña"
+            },
             "72c58f7792": "vista web",
             "82ba1c80ea": "localhost",
             "bea27bac4b": "enlaces",

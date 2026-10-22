@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { SettingsSearchEntry } from './settings-search'
+import { translateSearchKeyword } from './settings-search-keywords'
 
 export function getBrowserLinkRoutingShortcutLabel(platform: { isMac: boolean }): string {
   return platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'
@@ -85,6 +86,21 @@ export function getLinkRoutingBackgroundSearchEntry(): SettingsSearchEntry {
   return {
     title: getLinkRoutingBackgroundTitle(),
     description: getLinkRoutingBackgroundDescription(),
-    keywords: ['browser', 'links', 'background', 'focus', 'tab']
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+      ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingBackground.background',
+        'background'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingBackground.focus',
+        'focus'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingBackground.tab',
+        'tab'
+      )
+    ]
   }
 }

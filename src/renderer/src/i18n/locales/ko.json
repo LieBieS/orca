@@ -9590,6 +9590,11 @@
               "invert": "반전",
               "opposite": "반대"
             },
+            "linkRoutingBackground": {
+              "background": "백그라운드",
+              "focus": "포커스",
+              "tab": "탭"
+            },
             "72c58f7792": "웹뷰",
             "82ba1c80ea": "로컬호스트",
             "bea27bac4b": "링크",
