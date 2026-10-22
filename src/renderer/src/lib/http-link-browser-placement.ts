@@ -83,9 +83,13 @@ export function openLocalHttpLinkTab(
     return
   }
   showWorkspaceTabs(state, worktreeId)
-  // Why: keyboard focus follows the tab on screen, so Cmd/Ctrl+W closes the link, not its source.
-  if (tab?.activePageId) {
-    requestBrowserFocus({ pageId: tab.activePageId, target: 'webview' })
+  focusHttpLinkPage(tab?.activePageId)
+}
+
+/** Keyboard focus follows a link's tab, so Cmd/Ctrl+W closes the link rather than its source. */
+export function focusHttpLinkPage(pageId: string | null | undefined): void {
+  if (pageId) {
+    requestBrowserFocus({ pageId, target: 'webview' })
   }
 }
 

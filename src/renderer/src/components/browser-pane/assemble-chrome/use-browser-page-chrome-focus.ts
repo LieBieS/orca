@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type MutableRefObject, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type MutableRefObject,
+  type RefObject
+} from 'react'
 import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
@@ -53,6 +60,11 @@ export function useBrowserPageChromeFocus({
   const keybindings = useAppStore((s) => s.keybindings)
   const keepAddressBarFocusRef = useRef(false)
   const addressBarFocusGrabRef = useRef<(() => void) | null>(null)
+  // Why a layout effect: it lands before the previous render's passive cleanups read it.
+  const isActiveRef = useRef(isActive)
+  useLayoutEffect(() => {
+    isActiveRef.current = isActive
+  }, [isActive])
 
   const cancelAddressBarFocusGrab = useCallback((): void => {
     addressBarFocusGrabRef.current?.()
@@ -237,8 +249,9 @@ export function useBrowserPageChromeFocus({
     return () => {
       cancelled = true
       window.cancelAnimationFrame(frameId)
-      // Why: a re-run (StrictMode, a dependency change) mid-wait must still find the request.
-      if (!settled && waitedFrames < GUEST_ATTACH_WAIT_FRAMES) {
+      // Why: a re-run (StrictMode, a dependency change) mid-wait must still find the request; a pane
+      // the user left drops it, so coming back later doesn't pull focus into the page.
+      if (!settled && waitedFrames < GUEST_ATTACH_WAIT_FRAMES && isActiveRef.current) {
         queueBrowserFocusRequest({ pageId: browserTabId, target: 'webview' })
       }
     }

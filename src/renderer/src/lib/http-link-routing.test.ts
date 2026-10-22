@@ -19,7 +19,8 @@ const registerLocalhostLabelMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 const setActiveViewMock = vi.fn()
-const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+const openRuntimeBrowserTabMock = vi.fn((): Promise<string | null> => Promise.resolve(null))
+const dispatchEventMock = vi.fn()
 
 function noActiveWorkspace(): {
   activeWorktreeId: string | null
@@ -68,6 +69,7 @@ beforeEach(() => {
   registerHttpLinkStoreAccessor(() => storeState)
   registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
   vi.stubGlobal('window', {
+    dispatchEvent: dispatchEventMock,
     api: {
       shell: {
         openUrl: openUrlMock
@@ -246,6 +248,24 @@ describe('openHttpLink', () => {
       activate: true
     })
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  // Why: an SSH page renders on this desktop, so its link tab takes keyboard focus like a local one.
+  it('focuses the page an SSH link opened on this desktop', async () => {
+    storeState.settings = { openLinksInApp: true }
+    openRuntimeBrowserTabMock.mockResolvedValueOnce('ssh-page')
+
+    openHttpLink('https://example.com/', {
+      allowRemoteInApp: true,
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
+    })
+
+    await vi.waitFor(() =>
+      expect(dispatchEventMock).toHaveBeenCalledWith(
+        expect.objectContaining({ detail: { pageId: 'ssh-page', target: 'webview' } })
+      )
+    )
   })
 
   it('routes runtime and SSH document owners through their workspace browsers', () => {

@@ -178,9 +178,9 @@ function createClientBrowserTab(
   // Why: a desktop-hosted page in a runtime workspace stays owned by that runtime, or the
   // unified tab is disowned from its worktree (palette and activation skip it).
   ownerHostId: ExecutionHostId = hostId
-): void {
+): string | null {
   try {
-    state.createBrowserTab(request.workspaceId, request.url, {
+    const created = state.createBrowserTab(request.workspaceId, request.url, {
       activate: request.focusOnCreate !== false,
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
@@ -191,6 +191,7 @@ function createClientBrowserTab(
       ...(request.afterTabId ? { afterTabId: request.afterTabId } : {}),
       title: presentation.title
     })
+    return created.activePageId ?? null
   } catch (error) {
     throw openFailure(presentation.error, 'client tab creation rejected', error)
   }
@@ -205,9 +206,10 @@ function assertManagedBrowserEnabled(
   }
 }
 
+/** Resolves to the page id when the page renders on this desktop, else null. */
 export async function openWorkspaceBrowserTab(
   request: OpenWorkspaceBrowserTabRequest
-): Promise<void> {
+): Promise<string | null> {
   const presentation = intentPresentation(request.intent, request.url)
   if (!validateTarget(request.url)) {
     throw openFailure(presentation.error, 'target is not an http(s) URL')
@@ -268,8 +270,7 @@ export async function openWorkspaceBrowserTab(
     if (!host || host.kind === 'runtime') {
       throw openFailure(presentation.error, `unresolved client host: ${route.executionHostId}`)
     }
-    createClientBrowserTab(state, request, host.id, presentation)
-    return
+    return createClientBrowserTab(state, request, host.id, presentation)
   }
   if (
     route.executionHostId &&
@@ -290,8 +291,7 @@ export async function openWorkspaceBrowserTab(
     const localHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
     const ownerHostId =
       host?.kind === 'runtime' && route.executionHostId ? route.executionHostId : localHostId
-    createClientBrowserTab(state, request, localHostId, presentation, ownerHostId)
-    return
+    return createClientBrowserTab(state, request, localHostId, presentation, ownerHostId)
   }
   let created = false
   try {
@@ -320,4 +320,5 @@ export async function openWorkspaceBrowserTab(
   if (!created) {
     throw openFailure(presentation.error, 'runtime browser tab creation was unavailable')
   }
+  return null
 }

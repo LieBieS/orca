@@ -312,6 +312,19 @@ describe('useBrowserPageChromeFocus', () => {
     expect(document.activeElement).toBe(guest())
   })
 
+  it('drops a pending page focus when the user leaves the tab before its guest attaches', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames(2))
+    view.rerender(<ChromeHarness hasGuest={false} isActive={false} />)
+    act(() => addressBar().focus())
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(addressBar())
+  })
+
   it('leaves focus the user moves while the guest of a new tab attaches', () => {
     act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
 

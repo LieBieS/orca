@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { reselectWorkspaceKeepingHost } from './active-workspace-host'
 import {
+  focusHttpLinkPage,
   isHttpLinkBackgroundOpen,
   openLocalHttpLinkTab,
   prepareRemoteHttpLinkTab,
@@ -65,7 +66,10 @@ type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   expectedSshConnectionId?: string
 }
 
-type WorkspaceHttpLinkBrowserOpener = (request: WorkspaceHttpLinkBrowserRequest) => Promise<void>
+/** Resolves to the page id when the page renders on this desktop, else null. */
+type WorkspaceHttpLinkBrowserOpener = (
+  request: WorkspaceHttpLinkBrowserRequest
+) => Promise<string | null>
 
 type LocalhostLinkRepo = {
   id: string
@@ -162,23 +166,31 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
       (!effectiveSourceOwner && remoteRuntimeActive))
   ) {
     if (workspaceHttpLinkBrowserOpener && state) {
+      const fields = prepareRemoteHttpLinkTab(state, worktreeId)
       void workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
         url,
         intent: { kind: 'url' },
-        ...prepareRemoteHttpLinkTab(state, worktreeId),
+        ...fields,
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
             ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
             : {})
-      }).catch((error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
-        )
-      })
+      }).then(
+        (pageId) => {
+          if (fields.focusOnCreate !== false) {
+            focusHttpLinkPage(pageId)
+          }
+        },
+        (error) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+          )
+        }
+      )
     }
     return
   }
