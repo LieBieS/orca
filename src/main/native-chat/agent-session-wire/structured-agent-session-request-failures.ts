@@ -225,7 +225,7 @@ export class StructuredAgentSessionRequestFailures {
     const fence = journal.itemFence(request.id)
     const opener = journal.canonicalItemId(
       (request.kind === 'turn'
-        ? readAgentJournalTurn(journal.itemBody(request.id))?.userItemId
+        ? readAgentJournalTurn(journal.itemBody(request.id) ?? undefined)?.userItemId
         : request.id) ?? ''
     )
     const { clientMessageId } =

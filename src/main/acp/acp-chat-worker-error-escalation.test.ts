@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionSinkAdmission } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { OrchestrationDb } from '../runtime/orchestration/db'
 import { createRootDispatch } from '../runtime/orchestration/db/root-dispatch-test-fixture'
@@ -66,12 +67,14 @@ async function assigned() {
   const acquire = h.rig.adapter.acquire.bind(h.rig.adapter)
   let allowed = Infinity
   vi.spyOn(h.rig.adapter, 'acquire').mockImplementation((input) => {
-    const append = input.events.tryAppendTransition?.bind(input.events)
-    if (!append) {
+    const events = input.events
+    const append = events?.tryAppendTransition?.bind(events)
+    if (!events || !append) {
       throw new Error('transition sink missing')
     }
-    vi.spyOn(input.events, 'tryAppendTransition').mockImplementation((transition) =>
-      allowed-- > 0 ? append(transition) : { accepted: false, reason: 'backpressure' }
+    vi.spyOn(events, 'tryAppendTransition').mockImplementation(
+      (transition): StructuredAgentSessionSinkAdmission =>
+        allowed-- > 0 ? append(transition) : { accepted: false, reason: 'backpressure' }
     )
     return acquire(input)
   })
