@@ -1,4 +1,5 @@
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-browser-creation'
+import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/browser-new-tab-profile'
@@ -11,6 +12,7 @@ import type { SearchEngine } from '../../../shared/browser-url'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
+import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import {
   getClientCreationActionPolicy,
   runtimeHostsPagesOnThisDesktop,
@@ -30,6 +32,8 @@ export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engi
 export type OpenWorkspaceBrowserTabRequest = {
   workspaceId: string
   targetGroupId?: string
+  /** Opens the tab in a new split beside this group instead of targetGroupId. */
+  split?: TabSplitTarget
   /** Client-local unified tab id of the source; a source-following open omits targetGroupId. */
   afterTabId?: string
   url: string
@@ -183,6 +187,7 @@ function createClientBrowserTab(
       executionHostId: ownerHostId,
       ...resolveNewBrowserTabProfile(state, request.workspaceId, hostId),
       targetGroupId: request.targetGroupId,
+      ...(request.split ? { split: request.split } : {}),
       ...(request.afterTabId ? { afterTabId: request.afterTabId } : {}),
       title: presentation.title
     })
@@ -294,9 +299,7 @@ export async function openWorkspaceBrowserTab(
       worktreeId: request.workspaceId,
       environmentId,
       url: request.url,
-      targetGroupId: request.targetGroupId,
-      // Client placement survives older hosts publishing a page before the create response.
-      ...(request.targetGroupId ? { clientTargetGroupId: request.targetGroupId } : {}),
+      ...resolveWebRuntimeBrowserClientTargetGroup(state, request, environmentId),
       ...(request.afterTabId ? { clientAfterTabId: request.afterTabId } : {}),
       // Owner-pinned links need the host tab published before client reconciliation.
       ...(expectedEnvironmentId !== null ? { waitForRegistration: true } : {}),
