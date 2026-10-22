@@ -29,6 +29,7 @@ import {
   type QueuedMessageCard
 } from './structured-agent-session-queued-cards'
 import type {
+  AdmitStructuredAgentSessionAction,
   CaptureStructuredAgentSessionPresentation,
   StructuredAgentSessionMutate
 } from './use-structured-agent-session-mutate'
@@ -93,11 +94,12 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   sending?: readonly StructuredAgentSessionPendingSend[]
   composerScopeKey: string | undefined
   mutate: StructuredAgentSessionMutate
+  admit: AdmitStructuredAgentSessionAction
   capturePresentation: CaptureStructuredAgentSessionPresentation
   editTransport: QueuedEditTransport
 }): StructuredAgentSessionQueuedMessagesController {
   const { composerScopeKey, enabled, hasPendingPrompt, mutate, queuedMessages, submissions } = args
-  const { capturePresentation, isWorking, queuePause } = args
+  const { admit, capturePresentation, isWorking, queuePause } = args
   const sending = args.sending ?? NO_SENDS
 
   const cards = useMemo(
@@ -230,11 +232,15 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     const isCurrent = capturePresentation()
     // Refused while any of these cards is in flight; each shows busy until the whole Clear settles.
     return run([QUEUE_KEY, ...messageIds], 'clear', async () => {
+      const action = admit()
+      if (!action) {
+        return false
+      }
       const results = await mapSettledWithConcurrency(
         messageIds,
         CLEAR_DELETE_CONCURRENCY,
         (messageId) =>
-          args.editTransport.write<AgentSessionQueuedMessageDeleteResult>(
+          action.write<AgentSessionQueuedMessageDeleteResult>(
             'agentSession.queuedMessageDelete',
             'agentSession.queuedMessageDelete',
             { messageId }
@@ -261,7 +267,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         results.every((result) => result.status === 'fulfilled' && result.value.kind === 'done')
       )
     })
-  }, [args.editTransport, capturePresentation, clearCapable, run])
+  }, [admit, capturePresentation, clearCapable, run])
 
   return {
     cards,

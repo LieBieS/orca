@@ -74,9 +74,7 @@ export function useStructuredAgentSession(args: {
 }) {
   const {
     agent,
-    composerScopeKey,
     hostStopping = false,
-    isVisible,
     launch,
     providerStarting = false,
     queueFollowUps = true,
@@ -93,12 +91,13 @@ export function useStructuredAgentSession(args: {
     loadOlder,
     mutate,
     write,
+    admit,
     capturePresentation,
     providerVisible
   } = useStructuredAgentSessionTransport({
     sessionId,
     target,
-    isVisible,
+    isVisible: args.isVisible,
     enabled: transportEnabled,
     agentName: structuredAgentLabel(agent)
   })
@@ -123,7 +122,7 @@ export function useStructuredAgentSession(args: {
     sessionId,
     target,
     transportEnabled,
-    isVisible,
+    isVisible: args.isVisible,
     providerVisible,
     providerStarting,
     ...(args.providerRunning ? { providerRunning: true } : {}),
@@ -189,7 +188,7 @@ export function useStructuredAgentSession(args: {
   const rewind = useStructuredAgentSessionRewind({
     sessionId,
     target,
-    composerScopeKey,
+    composerScopeKey: args.composerScopeKey,
     ...args.rewind,
     state,
     support: transportEnabled ? rewindSupport : undefined,
@@ -245,9 +244,10 @@ export function useStructuredAgentSession(args: {
     isWorking,
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
     sending: pending,
-    composerScopeKey,
+    composerScopeKey: args.composerScopeKey,
     mutate,
     editTransport,
+    admit,
     capturePresentation
   })
   return {
@@ -316,7 +316,8 @@ export function useStructuredAgentSession(args: {
     /** A send made now while the agent works is held as a queued card: the host queues, and this
      *  send asks it to (the setting is on and no pending prompt blocks the queue). */
     sendsQueue: structuredAgentSessionNewSendsQueue(queue),
-    cancel: cancelStructuredAgentSessionPrompt.bind(null, target, mutate),
+    cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
+      cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
       mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
@@ -324,7 +325,7 @@ export function useStructuredAgentSession(args: {
         ...(taskId ? { taskId } : {})
       }),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
-      respondToStructuredAgentSessionPrompt({ item, response, target, mutate }),
+      respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,

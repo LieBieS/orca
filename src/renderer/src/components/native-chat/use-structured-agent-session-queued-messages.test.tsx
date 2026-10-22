@@ -3,11 +3,14 @@
 // The queued-message controller: which RPC each card action issues, and that a host which cannot
 // edit in place gets no Edit at all, never the old copy-and-delete.
 
+import { toast } from 'sonner'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
+const rpc = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/structured-agent-session-client', () => ({ callStructuredAgentSession: rpc }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
@@ -16,6 +19,7 @@ import {
   readNativeChatDraftCache
 } from './native-chat-draft-cache'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
+import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import type {
   StructuredAgentSessionMutate,
   StructuredAgentSessionWrite
@@ -40,25 +44,25 @@ function createHarness(
     enabled?: boolean
     composerScopeKey?: string | undefined
     mutateResult?: (call: MutateCall) => unknown
-    clearPending?: Promise<void>
     sending?: StructuredAgentSessionPendingSend[]
   } = {}
 ) {
   const mutateCalls: MutateCall[] = []
-  const writeCalls: MutateCall[] = []
-  const clearWrite: StructuredAgentSessionWrite = async <T,>(...call: MutateCall) => {
-    writeCalls.push(call)
-    await overrides.clearPending
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Clear calls this test writer only for queuedMessageDelete.
-    return { kind: 'done', value: { deleted: true, messageId: call[2].messageId } as T }
-  }
   const mutate = vi.fn(async (...call: MutateCall) => {
     mutateCalls.push(call)
     return overrides.mutateResult ? overrides.mutateResult(call) : null
   })
+  const mutation = renderHook(() =>
+    useStructuredAgentSessionMutate({
+      sessionId: 'session',
+      target: { kind: 'local' },
+      stateRef: { current: { fence: 3 } }
+    })
+  )
   const rendered = renderHook(() =>
     useStructuredAgentSessionQueuedMessages({
-      capturePresentation: () => () => true,
+      capturePresentation: mutation.result.current.capturePresentation,
+      admit: mutation.result.current.admit,
       enabled: overrides.enabled ?? true,
       queuedMessages: overrides.queuedMessages ?? [draft('draft-1', 1), draft('draft-2', 2)],
       queuePause: null,
@@ -73,11 +77,11 @@ function createHarness(
         target: { kind: 'local' },
         sessionId: 'session',
         capable: false,
-        write: clearWrite
+        write: mutation.result.current.write
       }
     })
   )
-  return { ...rendered, mutate, mutateCalls, writeCalls, clearWrite }
+  return { ...rendered, mutate, mutateCalls, dispose: mutation.unmount }
 }
 
 beforeEach(() => {
@@ -89,11 +93,20 @@ afterEach(() => {
 })
 
 describe('queued message actions', () => {
-  it('Clear deletes eight at a time and a repeated Clear sends nothing more', async () => {
+  it.each(['success', 'current', 'obsolete'])('Clear owns ten deletes: %s', async (outcome) => {
     const ids = Array.from({ length: 10 }, (_, index) => `draft-${index + 1}`)
     const release = Promise.withResolvers<void>()
+    let active = 0
+    let maximum = 0
+    rpc.mockImplementation(async (_target, _method, params) => {
+      maximum = Math.max(maximum, ++active)
+      await release.promise
+      active -= 1
+      return outcome !== 'success' && params.messageId === ids[9]
+        ? { ok: false, refusal: { code: 'agent_session_conflict' } }
+        : { ok: true, value: { deleted: true } }
+    })
     const harness = createHarness({
-      clearPending: release.promise,
       queuedMessages: ids.map((id, index) => draft(id, index + 1))
     })
     let pending: Promise<boolean> = Promise.resolve(false)
@@ -103,11 +116,21 @@ describe('queued message actions', () => {
       expect(await harness.result.current.resume()).toBe(false)
     })
     expect(harness.mutateCalls).toEqual([])
-    expect(harness.writeCalls.map(([, , fields]) => fields.messageId)).toEqual(ids.slice(0, 8))
+    expect(rpc.mock.calls.map(([, , fields]) => fields.messageId)).toEqual(ids.slice(0, 8))
     expect(harness.result.current.queuePending).toBe('clear')
+    if (outcome === 'obsolete') {
+      harness.dispose()
+    }
     release.resolve()
-    await act(async () => expect(await pending).toBe(true))
-    expect(harness.writeCalls).toHaveLength(ids.length)
+    await act(async () => expect(await pending).toBe(outcome === 'success'))
+    expect(rpc.mock.calls.map(([, , fields]) => fields.messageId)).toEqual(ids)
+    expect(maximum).toBe(8)
+    for (const [target, , fields] of rpc.mock.calls) {
+      expect(target).toEqual({ kind: 'local' })
+      expect(fields.envelope).toMatchObject({ sessionId: 'session', expectedRuntimeFence: 3 })
+    }
+    expect(ids.every((id) => harness.result.current.pending(id) === null)).toBe(true)
+    expect(toast.error).toHaveBeenCalledTimes(outcome === 'current' ? 1 : 0)
     expect(harness.result.current.queuePending).toBeNull()
   })
 

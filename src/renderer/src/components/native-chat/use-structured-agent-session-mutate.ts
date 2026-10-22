@@ -41,6 +41,13 @@ export type StructuredAgentSessionWrite = <T>(
 /** A write whose failure is shown as a toast; the control that sent it is the way to try again. */
 export type StructuredAgentSessionMutate = <T>(...args: WriteArgs) => Promise<T | null>
 
+export type StructuredAgentSessionAction = {
+  target: RuntimeClientTarget
+  write: StructuredAgentSessionWrite
+  mutate: StructuredAgentSessionMutate
+}
+export type AdmitStructuredAgentSessionAction = () => StructuredAgentSessionAction | null
+
 /** Captures the issuing pane visit for late presentation, never command or draft settlement. */
 export type CaptureStructuredAgentSessionPresentation = () => () => boolean
 
@@ -83,20 +90,18 @@ export function useStructuredAgentSessionMutate(args: {
 }): {
   write: StructuredAgentSessionWrite
   mutate: StructuredAgentSessionMutate
+  admit: AdmitStructuredAgentSessionAction
   capturePresentation: CaptureStructuredAgentSessionPresentation
 } {
   const { agentName, enabled = true, sessionId, stateRef, target } = args
   const inFlightStops = useRef(
     new Map<string, Promise<StructuredAgentSessionWriteOutcome<unknown>>>()
   )
-  const enabledRef = useRef(enabled)
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
   useLayoutEffect(() => {
-    enabledRef.current = enabled
     presentation.current = enabled ? {} : null
     return () => {
-      enabledRef.current = false
       presentation.current = null
     }
   }, [enabled, hostKey, sessionId])
@@ -152,16 +157,17 @@ export function useStructuredAgentSessionMutate(args: {
     [agentName, sessionId, target]
   )
 
-  const write = useCallback(
-    async <T>(
+  const admit = useCallback((): StructuredAgentSessionAction | null => {
+    const pressedFence = stateRef.current.fence
+    if (!enabled || presentation.current === null || pressedFence === null) {
+      return null
+    }
+    const isCurrent = capturePresentation()
+    const write: StructuredAgentSessionWrite = async <T>(
       method: string,
       fingerprintMethod: string,
       fields: Record<string, unknown>
     ): Promise<StructuredAgentSessionWriteOutcome<T>> => {
-      const pressedFence = stateRef.current.fence
-      if (!enabled || !enabledRef.current || pressedFence === null) {
-        return { kind: 'dropped' }
-      }
       if (
         !namesWhatItStops(fingerprintMethod, fields) ||
         (await supportsStructuredAgentSessionQuietRepeatedStop(target))
@@ -169,7 +175,7 @@ export function useStructuredAgentSessionMutate(args: {
         return send<T>(method, fingerprintMethod, fields, pressedFence)
       }
       // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
-      const key = `${sessionId}:${method}:${JSON.stringify(fields)}`
+      const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`
       const joined = inFlightStops.current.get(key)
       if (joined) {
         // The first press reports a failure; the one that joined it stays quiet.
@@ -189,21 +195,27 @@ export function useStructuredAgentSessionMutate(args: {
         }
       })
       return stopping
-    },
-    [enabled, send, sessionId, stateRef, target]
-  )
-
-  const mutate = useCallback(
-    async <T>(...writeArgs: WriteArgs): Promise<T | null> => {
-      const isCurrent = capturePresentation()
+    }
+    const mutate: StructuredAgentSessionMutate = async <T>(...writeArgs: WriteArgs) => {
       const outcome = await write<T>(...writeArgs)
       if (outcome.kind === 'not-done' && isCurrent()) {
         toast.error(outcome.notice)
       }
       return outcome.kind === 'done' ? outcome.value : null
-    },
-    [capturePresentation, write]
+    }
+    return { target, write, mutate }
+  }, [capturePresentation, enabled, hostKey, send, sessionId, stateRef, target])
+
+  const write = useCallback(
+    async <T>(...writeArgs: WriteArgs): Promise<StructuredAgentSessionWriteOutcome<T>> =>
+      admit()?.write<T>(...writeArgs) ?? { kind: 'dropped' },
+    [admit]
+  )
+  const mutate = useCallback(
+    async <T>(...writeArgs: WriteArgs): Promise<T | null> =>
+      admit()?.mutate<T>(...writeArgs) ?? null,
+    [admit]
   )
 
-  return { write, mutate, capturePresentation }
+  return { write, mutate, admit, capturePresentation }
 }

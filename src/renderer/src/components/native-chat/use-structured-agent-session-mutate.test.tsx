@@ -235,6 +235,27 @@ it.each([
   expect(isCurrent()).toBe(false)
 })
 
+it('keeps pending legacy Stops independent across semantic hosts', async () => {
+  const first = Promise.withResolvers<unknown>()
+  mocks.call.mockReturnValueOnce(first.promise).mockResolvedValue({ ok: true, value: 'B' })
+  const view = renderHook(
+    ({ environmentId }) =>
+      useStructuredAgentSessionMutate({
+        sessionId: 'session-1',
+        target: { kind: 'environment', environmentId },
+        stateRef: { current: { fence: 3 } }
+      }),
+    { initialProps: { environmentId: 'A' } }
+  )
+  const pendingA = stop(view.result.current)
+  await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+  view.rerender({ environmentId: 'B' })
+  expect(await stop(view.result.current)).toBe('B')
+  expect(mocks.call.mock.calls.map(([target]) => target.environmentId)).toEqual(['A', 'B'])
+  first.resolve({ ok: true, value: 'A' })
+  expect(await pendingA).toBe('A')
+})
+
 describe('a Stop pressed again, against a host without the quiet repeated Stop', () => {
   it('joins the one still in flight instead of sending a second', async () => {
     const host = heldStops()
