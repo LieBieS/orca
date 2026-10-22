@@ -1,5 +1,4 @@
 import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
-import { handleGuestWindowCloseMessage } from './host-guest/browser-page-window-close'
 import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
 
 export function createBrowserClientPageRetainedRoot(document: Document): HTMLDivElement {
@@ -50,6 +49,21 @@ export function hideRetainedHostWhileGuestIsBlank(
   }
 }
 
+type BrowserClientPageGuestMessageHandler = (
+  browserPageId: string,
+  webview: Electron.WebviewTag,
+  event: Electron.IpcMessageEvent
+) => void
+
+let guestMessageHandler: BrowserClientPageGuestMessageHandler | null = null
+
+// Why injected: this module also runs in a bare Electron fixture that cannot load the app store.
+export function registerBrowserClientPageGuestMessageHandler(
+  handler: BrowserClientPageGuestMessageHandler | null
+): void {
+  guestMessageHandler = handler
+}
+
 export function createBrowserClientPageWebview(options: {
   createWebview?: () => Electron.WebviewTag
   document: Document
@@ -62,7 +76,7 @@ export function createBrowserClientPageWebview(options: {
   webview.setAttribute('src', 'about:blank')
   Object.assign(webview.style, { display: 'flex', width: '100%', height: '100%' })
   webview.addEventListener('ipc-message', (event) =>
-    handleGuestWindowCloseMessage(options.identity.browserPageId, webview, event)
+    guestMessageHandler?.(options.identity.browserPageId, webview, event)
   )
   return webview
 }
