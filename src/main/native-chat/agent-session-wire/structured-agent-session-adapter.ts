@@ -364,6 +364,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** The provider reported taking a send it has neither answered nor ended, as a queued follow-up
    *  or a silent retry does. Derived from the live child; false with none. */
   holdsDispatch?(sessionId: string): boolean
+  /** Captures only this input's pending answer/output in the supplied live acquisition. */
+  capturePendingOutput?(input: {
+    sessionId: string
+    clientMessageId: string
+    fence: number
+    generation: string
+  }): (() => boolean) | undefined
   /** The sends the live child still holds as its own work, by client message id; undefined with
    *  no live child, and the host then reads an unanswered send as held. */
   heldSends?(sessionId: string): ReadonlySet<string> | undefined

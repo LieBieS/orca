@@ -19,6 +19,8 @@ export type AcpPromptTurn = {
   compaction?: AcpCompaction
 }
 
+export const acpPromptTurnId = (clientMessageId: string): string => `prompt:${clientMessageId}`
+
 /** An injected identity is known before any provider output arrives. */
 export class AcpPromptTurns {
   current?: AcpPromptTurn
@@ -51,7 +53,7 @@ export class AcpPromptTurns {
       }
       return { promptId: compactionTurn, events: [] }
     }
-    const turn = `prompt:${clientMessageId}`
+    const turn = acpPromptTurnId(clientMessageId)
     this.current = { clientMessageId, turn, requestedAt: at, opened: false }
     const injected = this.dialect.injectedPromptIdentity === true
     return { promptId: turn, events: injected ? [] : this.start(turn, at) }

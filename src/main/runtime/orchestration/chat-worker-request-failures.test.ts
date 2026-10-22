@@ -6,6 +6,9 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { structuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
@@ -46,7 +49,7 @@ afterEach(async () => {
   }
 })
 
-async function rig() {
+async function rig(capturePendingOutput?: StructuredAgentSessionAdapter['capturePendingOutput']) {
   const root = await mkdtemp(join(tmpdir(), 'orca-pr31941-requests-'))
   roots.push(root)
   const journal = await journals.open({
@@ -85,6 +88,8 @@ async function rig() {
   })
   const observer = new StructuredAgentSessionRequestFailures({
     sessions,
+    capturePendingOutput,
+    wordsContext: () => ({ agentName: 'Codex', retryControl: true }),
     onFailure: (failure) => {
       void escalateChatWorkerError(failure, { db: () => db, enabled: () => enabled, notify })
     }
@@ -461,3 +466,115 @@ it('announces proven live death before cleanup, deduplicates settlement, and exc
   await tick()
   expect(r.mail()).toHaveLength(1) // Late-diagnostic policy is deliberately pending.
 })
+
+it('uses the original malformed saved submission through its canonical opener, never its bounded digest', async () => {
+  const capture = vi.fn(() => () => false)
+  const r = await rig(capture)
+  const clientMessageId = `saved-${'x'.repeat(1100)}-\ud800`
+  await r.journal.appendSubmission({
+    clientMessageId,
+    payloadFingerprint: 'malformed',
+    body: hostTestMessage('saved'),
+    fence: 0
+  })
+  r.session.child = { generation: 'held-generation', fence: 0, phase: 'ready' }
+  await batch(r.journal, 'failed-saved', [
+    mutation('saved-turn', {
+      kind: 'turn',
+      turnId: 'saved-turn',
+      state: 'completed',
+      outcome: 'failure',
+      userItemId: agentJournalSubmissionKey(clientMessageId)
+    }),
+    words('saved-turn', 'saved failure')
+  ])
+  await tick()
+  expect(capture).toHaveBeenCalledExactlyOnceWith({
+    sessionId: SESSION,
+    clientMessageId,
+    fence: 0,
+    generation: 'held-generation'
+  })
+  expect(r.mail()[0]?.body).toContain('saved failure')
+})
+
+it.each(['startup', 'ordinary', 'scoped', 'committed'] as const)(
+  'captures %s death wording before cleanup without awaiting ACP or borrowing a newer end',
+  async (mode) => {
+    const capture = vi.fn(() => () => true)
+    const r = await rig(capture)
+    await batch(r.journal, 'running', [
+      mutation('dying', { kind: 'turn', turnId: 'dying', state: 'running' }),
+      ...(mode === 'scoped' ? [words('dying', 'meaningful saved diagnostic')] : [])
+    ])
+    const failure = {
+      kind: 'providerExited' as const,
+      detail: { text: 'exact original exit detail', audience: 'person' as const }
+    }
+    r.session.lastEndedChild = {
+      generation: 'old',
+      fence: 0,
+      cause: 'exit',
+      rootGone: true,
+      reason: null,
+      duringStartup: mode === 'startup' || mode === 'committed',
+      failure,
+      endedAt: r.journal.cursor()
+    }
+    if (mode === 'committed') {
+      await batch(r.journal, 'explicit', [
+        turn('dying', 'failure'),
+        words('dying', 'explicit failure words')
+      ])
+    } else {
+      r.observer.generationEnded(SESSION)
+    }
+    r.session.lastEndedChild = {
+      ...r.session.lastEndedChild,
+      generation: 'new',
+      failure: {
+        kind: 'providerExited',
+        detail: { text: 'unrelated B detail', audience: 'person' }
+      }
+    }
+    if (mode !== 'scoped' && mode !== 'committed') {
+      await batch(r.journal, 'generic-cleanup', [
+        mutation('dying', { kind: 'turn', turnId: 'dying', state: 'interrupted' }),
+        mutation(
+          'cleanup-error',
+          {
+            kind: 'status',
+            tone: 'error',
+            ...agentSessionFailureWords(
+              { kind: 'providerExited' },
+              { agentName: 'Codex', surface: 'row' }
+            )
+          },
+          'dying'
+        )
+      ])
+    }
+    await tick()
+    expect(r.mail()).toHaveLength(1)
+    const body = r.mail()[0]?.body ?? ''
+    if (mode === 'startup') {
+      expect(body).toContain(
+        structuredAgentSessionStartFailure(
+          { exit: failure },
+          { agentName: 'Codex', retryControl: true }
+        ).reason
+      )
+    } else if (mode === 'scoped') {
+      expect(body).toContain('Error: meaningful saved diagnostic')
+    } else if (mode === 'committed') {
+      expect(body).toContain('Error: explicit failure words')
+    } else {
+      expect(body).toContain('exact original exit detail')
+    }
+    expect(body).not.toContain('unrelated B detail')
+    expect(capture).not.toHaveBeenCalled()
+    await batch(r.journal, 'later', [words('dying', 'later cleanup words')])
+    await tick()
+    expect(r.mail()).toHaveLength(1)
+  }
+)

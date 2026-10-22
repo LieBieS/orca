@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
@@ -14,6 +15,23 @@ export class AcpStructuredChildren {
   readonly sessions = new Map<string, AcpStructuredChild>()
   readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
+  capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) => {
+    const session = this.sessions.get(input.sessionId)
+    if (
+      !session ||
+      !isAcpReadySession(session) ||
+      session.fence !== input.fence ||
+      session.acquisitionGeneration !== input.generation
+    ) {
+      return undefined
+    }
+    const { turns, lane } = session
+    const pending = turns.capturePendingSend(input.clientMessageId)
+    return () =>
+      session.journalClosed === null &&
+      (pending() || lane.hasPendingDiagnostic(input.clientMessageId))
+  }
+
   /** A requested close: proven by the root's exit; a tree not proven gone is the caller's to report. */
   async close(sessionId: string): Promise<boolean> {
     const connection = this.sessions.get(sessionId)?.connection

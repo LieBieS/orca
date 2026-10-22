@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
+import { structuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -54,9 +56,16 @@ function chatWorkerDispatches(sessionId: string, db: OrchestrationDb): ChatWorke
 
 function unrecordedError(request: StructuredAgentSessionRequestFailure) {
   const agentName = tuiAgentDisplayName(request.agent) ?? 'The agent'
-  const fact = agentSessionFailureFact('providerExited')
+  const fact = request.death?.failure ?? agentSessionFailureFact('providerExited')
+  const context = { agentName, ...request.death }
+  const words = request.death?.duringStartup
+    ? structuredAgentSessionStartFailure({ exit: fact }, context)
+    : {
+        reason: agentSessionFailureWords(fact, { ...context, surface: 'row' }).text,
+        rejection: fact
+      }
   return request.outcome === 'interruption'
-    ? { text: agentSessionFailureWords(fact, { surface: 'row', agentName }).text, kind: fact.kind }
+    ? { text: words.reason, kind: words.rejection.kind, detail: fact.detail?.text }
     : { text: `${agentName} ended its turn with an error and recorded no message.` }
 }
 
@@ -81,13 +90,29 @@ export async function escalateChatWorkerError(
     if (!db || targets.length === 0) {
       return
     }
+    const deadline = performance.now() + 2_000
+    const pending = request.death ? undefined : request.capturePendingOutput?.()
     // Settlement publication and promise continuations precede the ordered error read.
     await new Promise((resolve) => setImmediate(resolve))
+    while (pending?.()) {
+      const remaining = deadline - performance.now()
+      if (remaining <= 0) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(50, remaining)))
+    }
     const snapshot = await request.read()
     if (!snapshot) {
       return
     }
-    const error = chatRequestError(snapshot, request)
+    const recorded = chatRequestError(snapshot, request)
+    const error =
+      request.death &&
+      (request.death.duringStartup ||
+        !recorded ||
+        (recorded.kind === 'providerExited' && !recorded.detail))
+        ? unrecordedError(request)
+        : recorded
     if (isSenderOwnRejection(error)) {
       return
     }

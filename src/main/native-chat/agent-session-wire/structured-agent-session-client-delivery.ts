@@ -1,4 +1,5 @@
 import { StructuredAgentSessionRequestFailures } from './structured-agent-session-request-failures'
+import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
@@ -55,7 +56,13 @@ export class StructuredAgentSessionClientDelivery {
   ) {
     this.requestFailures = new StructuredAgentSessionRequestFailures({
       sessions,
-      onFailure: (failure) => deps().onRequestFailure?.(failure)
+      onFailure: (failure) => deps().onRequestFailure?.(failure),
+      capturePendingOutput: (input) => deps().adapter.capturePendingOutput?.(input),
+      wordsContext: (sessionId) =>
+        structuredAgentSessionFailureWordsContext(
+          deps().store.getRecord(sessionId),
+          sessions.get(sessionId)?.journal
+        )
     })
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,

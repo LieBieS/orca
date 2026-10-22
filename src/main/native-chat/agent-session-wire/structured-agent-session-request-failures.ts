@@ -15,6 +15,8 @@ import { classifyDispatchRejection } from '../../../shared/structured-agent-sess
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 
 export type StructuredAgentSessionRequestFailure = {
   sessionId: string
@@ -22,6 +24,9 @@ export type StructuredAgentSessionRequestFailure = {
   kind: 'turn' | 'refused-send'
   id: string
   outcome: 'failure' | 'interruption'
+  capturePendingOutput?: () => (() => boolean) | undefined
+  death?: NonNullable<StructuredAgentSessionHostSession['lastEndedChild']> &
+    AgentSessionFailureWordsContext
   read: () => Promise<AgentJournalSnapshot | null>
 }
 
@@ -41,6 +46,8 @@ export class StructuredAgentSessionRequestFailures {
     private readonly deps: {
       sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
       onFailure: (failure: StructuredAgentSessionRequestFailure) => void
+      capturePendingOutput?: StructuredAgentSessionAdapter['capturePendingOutput']
+      wordsContext?: (sessionId: string) => AgentSessionFailureWordsContext
     }
   ) {}
 
@@ -213,12 +220,31 @@ export class StructuredAgentSessionRequestFailures {
       return
     }
     const { journal, epoch } = baseline
+    const session = this.deps.sessions.get(sessionId)
+    const child = session?.child
+    const fence = journal.itemFence(request.id)
+    const opener = journal.canonicalItemId(
+      (request.kind === 'turn'
+        ? readAgentJournalTurn(journal.itemBody(request.id))?.userItemId
+        : request.id) ?? ''
+    )
+    const { clientMessageId } =
+      journal
+        .submissions()
+        .find(({ clientMessageId: id }) => agentJournalSubmissionKey(id) === opener) ?? {}
+    const generation = child?.fence === fence ? child?.generation : undefined
+    const end = outcome === 'interruption' ? session?.lastEndedChild : undefined
     this.deps.onFailure({
       sessionId,
       agent: journal.agent,
       kind: request.kind,
       id: request.id,
       outcome,
+      death: end && { ...end, ...this.deps.wordsContext?.(sessionId) },
+      capturePendingOutput: () =>
+        clientMessageId && generation && fence !== undefined
+          ? this.deps.capturePendingOutput?.({ sessionId, clientMessageId, fence, generation })
+          : undefined,
       read: () =>
         journal.readInOrder(() =>
           this.baselines.get(sessionId) === baseline && journal.epoch === epoch

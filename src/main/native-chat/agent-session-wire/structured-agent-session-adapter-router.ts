@@ -115,6 +115,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.capturePendingOutput?.(input)
+
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
     this.liveOwnerOrNull(sessionId)?.heldSends?.(sessionId)
 
