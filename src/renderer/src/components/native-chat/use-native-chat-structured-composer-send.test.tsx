@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import {
+  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
@@ -52,6 +53,7 @@ function harness(
     structuredTransport.threadGoal = threadGoal
   }
   structuredTransport.onSubmitted = onSubmitted
+  const setDraft = vi.fn()
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent,
@@ -60,11 +62,11 @@ function harness(
       structuredTransport,
       isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setDraft: vi.fn(),
+      setDraft,
       setCaret: vi.fn()
     })
   )
-  return { send: result.current, structuredTransport }
+  return { send: result.current, structuredTransport, setDraft }
 }
 
 // The guard exists because a host command sends no message, so its attachments
@@ -222,3 +224,41 @@ it('settles captured command text without publishing obsolete notices', async ()
   expect(readNativeChatComposerDraft('tab-1:pane').text).toBe(' next')
   expect(structuredTransport.onError).not.toHaveBeenCalled()
 })
+
+it('checks both the picked command and its draft, and projects completed paths', async () => {
+  const { send, structuredTransport } = harness('claude')
+  const id = '00000000-0000-4000-8000-000000000000'
+  const token = `[Pasted text](orca-paste:${id})`
+  await send(token, [])
+  updateNativeChatComposerDraft('tab-1:pane', { text: token }, 'immediate')
+  await send('/review', [])
+  expect(structuredTransport.send).not.toHaveBeenCalled()
+  updateNativeChatComposerDraft(
+    'tab-1:pane',
+    { pastedTextFiles: { [id]: '/p/saved.txt' } },
+    'immediate'
+  )
+  await send(`a${token}${token}b`, [])
+  expect(structuredTransport.send).toHaveBeenCalledWith('a @/p/saved.txt @/p/saved.txt b', [])
+  clearNativeChatComposerDraftsForTests()
+})
+
+it.each(['claude', 'codex'] as const)(
+  'keeps an oversized %s draft before transport admission',
+  async (agent) => {
+    clearNativeChatComposerDraftsForTests()
+    const { send, structuredTransport, setDraft } = harness(agent)
+    const text = 'x'.repeat(270014)
+    updateNativeChatComposerDraft('tab-1:pane', { text }, 'immediate')
+    const submitted = readNativeChatComposerDraft('tab-1:pane')
+    await send(text, [])
+    expect(structuredTransport.send).not.toHaveBeenCalled()
+    expect(structuredTransport.onError).toHaveBeenCalledWith(
+      expect.stringContaining('over the 256 KB limit'),
+      undefined
+    )
+    expect(setDraft).not.toHaveBeenCalled()
+    expect(readNativeChatComposerDraft('tab-1:pane')).toBe(submitted)
+    clearNativeChatComposerDraftsForTests()
+  }
+)
