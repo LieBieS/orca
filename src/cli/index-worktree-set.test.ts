@@ -80,7 +80,11 @@ describe('orca cli worktree awareness', () => {
         new RuntimeRpcFailureError({
           id: 'req_missing_parent',
           ok: false,
-          error: { code: 'selector_not_found', message: 'selector_not_found' }
+          error: {
+            code: 'selector_not_found',
+            message: 'selector_not_found',
+            data: { orchestrationRequestId: 'req_mutation', nextSteps: ['Inspect mutation.'] }
+          }
         })
       )
       logSpy.mockClear()
@@ -89,6 +93,9 @@ describe('orca cli worktree awareness', () => {
         '/tmp/repo'
       )
       const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
+      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['worktree.set'])
+      expect(output.data.orchestrationRequestId).toBe('req_mutation')
+      expect(output.data.nextSteps).toContain('Inspect mutation.')
       expect(output.data.nextSteps.join(' ')).toContain('parent selector "name:missing"')
       expect(output.data.nextSteps.join(' ')).toContain(
         'The server did not identify which selector failed.'
@@ -98,6 +105,67 @@ describe('orca cli worktree awareness', () => {
       )
       expect(process.exitCode).toBe(1)
       expect(errSpy).not.toHaveBeenCalled()
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
+  it('keeps child and parent lookup recovery distinct before mutation', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    const cwd = '/tmp/not-managed'
+    const rpc = {
+      id: 'req_child',
+      ok: false as const,
+      error: {
+        code: 'selector_not_found',
+        message: 'selector_not_found',
+        data: { orchestrationRequestId: 'req_original', nextSteps: ['Inspect original request.'] }
+      },
+      _meta: { runtimeId: 'runtime_original' }
+    }
+    try {
+      for (const stage of ['child', 'parent', 'preflight']) {
+        for (const json of [true, false]) {
+          callMock.mockReset()
+          log.mockClear()
+          err.mockClear()
+          const worktree = stage === 'child' ? 'current' : 'name:x'
+          const parent = stage === 'parent' ? 'current' : 'name:existing-parent'
+          if (stage === 'preflight') {
+            callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(rpc))
+          } else {
+            queueFixtures(callMock, worktreeListFixture([]))
+          }
+          const args = ['worktree', 'set', '--worktree', worktree, '--parent-worktree', parent]
+          if (stage === 'preflight') {
+            args.push('--gitlab-issue', 'https://gitlab.com/group/repo/-/issues/1')
+          }
+          await main([...args, ...(json ? ['--json'] : [])], cwd)
+          const text = String((json ? log : err).mock.calls.at(-1)?.[0])
+          const response = json ? JSON.parse(text) : undefined
+          expect(callMock.mock.calls.map(([method]) => method)).toEqual([
+            stage === 'preflight' ? 'worktree.show' : 'worktree.list'
+          ])
+          expect(text).toContain(
+            stage === 'preflight' ? 'Inspect original request.' : `current directory: ${cwd}`
+          )
+          expect(text).toContain(
+            stage === 'parent' ? 'explicit parent selector' : 'No Orca workspace matched'
+          )
+          expect(text).not.toContain(stage === 'parent' ? 'name:x' : 'parent selector')
+          if (response) {
+            expect(response.id).toBe(stage === 'preflight' ? rpc.id : 'local')
+            expect(response._meta.runtimeId).toBe(
+              stage === 'preflight' ? rpc._meta.runtimeId : null
+            )
+            if (stage === 'preflight') {
+              expect(response.error.data).toMatchObject({ orchestrationRequestId: 'req_original' })
+            }
+          }
+        }
+      }
     } finally {
       process.exitCode = priorExitCode
     }

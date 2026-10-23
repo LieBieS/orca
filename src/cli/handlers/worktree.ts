@@ -1,3 +1,4 @@
+import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -243,7 +244,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    const result = await client.call<RuntimeWorktreeSetResult>('worktree.set', {
+    const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
       ...reviewLinks,
@@ -251,9 +252,22 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       isUnread,
-      parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
+      parentWorktree: await withWorktreeSelectorRecovery(
+        getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
+        parentCwdNextSteps(parentSelector),
+        parentSelector
+      ),
       noParent: flags.get('no-parent') === true
     })
+    const result = await withWorktreeSelectorRecovery(
+      pending,
+      parentSelector
+        ? [
+            `Orca could not find the worktree selector "${worktree}" or the parent selector "${parentSelector}". The server did not identify which selector failed.`,
+            'Check both selectors with orca worktree show --worktree <selector> --json.'
+          ]
+        : []
+    )
     if (!json) {
       for (const warning of result.result.warnings ?? []) {
         console.error(`warning: ${warning.message}`)

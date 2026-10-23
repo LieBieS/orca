@@ -34,6 +34,10 @@ function attachSetupDecisionRecovery(error: unknown, replayingLaunch: boolean): 
         : [])
     ]
   }
+  return attachCliErrorData(error, data)
+}
+
+export function attachCliErrorData(error: RuntimeClientError, data: unknown): RuntimeClientError {
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({
       ...error.response,

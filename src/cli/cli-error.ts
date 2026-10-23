@@ -13,7 +13,6 @@ export type CliErrorContext = {
   commandPath?: readonly string[]
   /** The `--worktree` value this invocation sent; the runtime's error never echoes it. */
   worktreeSelector?: string
-  parentWorktreeSelector?: string
   /** The `--repo` value this invocation sent, for the same reason. */
   repoSelector?: string
   /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
@@ -30,14 +29,6 @@ function contextRecovery(
   context: CliErrorContext
 ): ContextRecovery | undefined {
   if (code === 'selector_not_found' && context.worktreeSelector) {
-    if (context.commandPath?.join(' ') === 'worktree set' && context.parentWorktreeSelector) {
-      return {
-        nextSteps: [
-          `Orca could not find the worktree selector "${context.worktreeSelector}" or the parent selector "${context.parentWorktreeSelector}". The server did not identify which selector failed.`,
-          'Check both selectors with orca worktree show --worktree <selector> --json.'
-        ]
-      }
-    }
     return worktreeSelectorRecovery(context.worktreeSelector)
   }
   if (code === 'selector_ambiguous') {
@@ -208,6 +199,18 @@ function mergeContextRecovery(
   selector: ReturnType<typeof contextRecovery>
 ): unknown {
   if (!selector) {
+    return data
+  }
+  if (
+    data &&
+    typeof data === 'object' &&
+    'validSelectorForms' in data &&
+    'nextSteps' in data &&
+    Array.isArray(data.validSelectorForms) &&
+    data.validSelectorForms.every((form: unknown) => typeof form === 'string') &&
+    Array.isArray(data.nextSteps) &&
+    data.nextSteps.every((step: unknown) => typeof step === 'string')
+  ) {
     return data
   }
   if (data === null || typeof data !== 'object') {
