@@ -312,6 +312,18 @@ describe('useBrowserPageChromeFocus', () => {
     expect(document.activeElement).toBe(guest())
   })
 
+  // Why: a remote link's request can arrive after the pane mounted but before its guest attached.
+  it('focuses the page when a request event lands before its guest attaches', () => {
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames())
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+    act(() => flushFrames(3))
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
   it('leaves focus the user moves in the frame the guest attaches', () => {
     act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
 
