@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
 const mocks = vi.hoisted(() => {
-  const settings: { activeRuntimeEnvironmentId: string | null } = {
+  const settings: { activeRuntimeEnvironmentId: string | null; openLinksInApp?: boolean } = {
     activeRuntimeEnvironmentId: null
   }
   const tabGroups: Record<string, unknown> = {}
@@ -101,7 +101,35 @@ describe('terminal file link actions', () => {
     expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(1, '/repo/src/main.ts', 12, 4, deps)
     expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(2, '/repo/src/main.ts', 12, 4, {
       ...deps,
-      openWithSystemDefault: true
+      openWithSystemDefault: true,
+      browserDestination: 'system'
+    })
+  })
+
+  it('offers a local HTML file the link-routing browsers, primary first', () => {
+    const request = vi.fn()
+    handleTerminalFileLink('/repo/report.html', null, null, plainEvent(), deps, context(request))
+    mocks.settings = { activeRuntimeEnvironmentId: null, openLinksInApp: true }
+    handleTerminalFileLink('/repo/report.html', null, null, plainEvent(), deps, context(request))
+
+    const [systemFirst, orcaFirst] = request.mock.calls.map(([call]) => call)
+    expect([systemFirst.primary.label, systemFirst.alternate.label]).toEqual([
+      'System Browser',
+      'Orca Browser'
+    ])
+    expect([orcaFirst.primary.label, orcaFirst.alternate.label]).toEqual([
+      'Orca Browser',
+      'System Browser'
+    ])
+    systemFirst.primary.run()
+    systemFirst.alternate.run()
+    expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(1, '/repo/report.html', null, null, {
+      ...deps,
+      browserDestination: 'system'
+    })
+    expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(2, '/repo/report.html', null, null, {
+      ...deps,
+      browserDestination: 'orca'
     })
   })
 
@@ -141,7 +169,8 @@ describe('terminal file link actions', () => {
     // The open flow downloads a host file and opens a path the host disowns on this computer.
     expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/docs/report.html', null, null, {
       ...deps,
-      openWithSystemDefault: true
+      openWithSystemDefault: true,
+      browserDestination: 'system'
     })
   })
 

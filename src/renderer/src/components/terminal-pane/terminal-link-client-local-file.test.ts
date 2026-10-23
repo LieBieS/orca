@@ -109,6 +109,7 @@ describe('a link to this computer printed in a paired-server terminal', () => {
   })
 
   it('renders a clicked HTML file in a browser tab this computer owns', async () => {
+    storeState.settings = { openLinksInApp: true }
     hostDisowns('/Users/me/Desktop/review.html')
 
     openDetectedFilePath('/Users/me/Desktop/review.html', null, null, serverWorkspace)

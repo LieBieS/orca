@@ -1,5 +1,6 @@
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { buildHttpLinkActions } from '@/lib/http-link-destinations'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
@@ -8,6 +9,7 @@ import {
   terminalLinkWslDistro,
   type FileOpenFailure
 } from './terminal-file-open-routing'
+import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import {
   requestTerminalLinkAction,
@@ -86,6 +88,13 @@ export function buildFileLinkActions(
   )
   const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
   const isMac = navigator.userAgent.includes('Mac')
+  // Why: these rows promise the OS app, which Shift's link routing would not for an HTML page.
+  const openWithDefaultApp = (): void =>
+    openDetectedFilePath(filePath, line, column, {
+      ...deps,
+      openWithSystemDefault: true,
+      browserDestination: 'system'
+    })
 
   // Why: the OS can only launch a local file, so remote links keep the same row by
   // downloading first — local and remote workspaces offer the same actions.
@@ -103,8 +112,7 @@ export function buildFileLinkActions(
                   'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
                   'Open folder'
                 ),
-            run: () =>
-              openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
+            run: openWithDefaultApp
           }
         : null
       : canOpenWithSystemDefault
@@ -113,8 +121,7 @@ export function buildFileLinkActions(
               'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
               'Open with default app'
             ),
-            run: () =>
-              openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
+            run: openWithDefaultApp
           }
         : // Why the path shape and not a stat: the popover is built synchronously on hover, and a
           // remote stat per link would put a round-trip in front of every terminal path. A directory
@@ -127,11 +134,7 @@ export function buildFileLinkActions(
                 'Download & open with default app'
               ),
               // Why the open flow, not a direct download: a path the host disowns may be on this computer.
-              run: () =>
-                openDetectedFilePath(filePath, line, column, {
-                  ...deps,
-                  openWithSystemDefault: true
-                })
+              run: openWithDefaultApp
             }
   // Why omit, not disable: the popover has no disabled rows. The OS file manager can only show a
   // file on this machine.
@@ -166,6 +169,16 @@ export function buildFileLinkActions(
         }
       : null
   const secondaryActions = [openInGroupRow, revealRow].filter((row) => row !== null)
+  if (!worktreeRoot && canOpenWithSystemDefault && isHtmlFilePath(mappedPath)) {
+    return {
+      destination: mappedPath,
+      kind: 'file',
+      ...buildHttpLinkActions(localHtmlFileDestinations(), (browserDestination) =>
+        openDetectedFilePath(filePath, line, column, { ...deps, browserDestination })
+      ),
+      ...(secondaryActions.length > 0 ? { secondaryActions } : {})
+    }
+  }
   return {
     destination: mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
