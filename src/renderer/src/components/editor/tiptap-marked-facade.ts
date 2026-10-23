@@ -58,8 +58,8 @@ function isListToken(token: Tokens.Generic | undefined): token is Tokens.List {
 }
 
 class BlockquoteListTokenizer extends Tokenizer {
-  // Why: Marked's blockquote() lazy continuation calls `this.list(newText)!` (still so in
-  // v18), skipping the registered extended-marker (a., iii)) tokenizers, then reads `.raw`.
+  // Why: Marked's blockquote() lazy continuation calls `this.list(newText)!` (still so in v18),
+  // skipping the registered tokenizer that also reads `1.` + no-break space, then reads `.raw`.
   list(source: string): Tokens.List | undefined {
     const token = super.list(source)
     if (token || !EXTENDED_LIST_ITEM.test(source)) {

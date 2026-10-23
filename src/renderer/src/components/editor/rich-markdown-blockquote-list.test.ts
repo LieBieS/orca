@@ -15,10 +15,11 @@ function openMarkdown(source: string): Editor {
 }
 
 describe('rich markdown blockquote list continuations', () => {
-  it.each(['a.', 'Z)', 'aa.', 'zz)', 'I.', 'iii)', '1.', '3)', '1234567890.'])(
+  // A no-break space after the marker is Tiptap's but not Marked's, so it reaches the fallback.
+  it.each(['1.\u00a0', '3)\u00a0', '1234567890.\u00a0', '1. ', '3) '])(
     'opens %j without throwing during Markdown initialization',
     (marker) => {
-      const source = `> ${marker} first\ncontinued`
+      const source = `> ${marker}first\ncontinued`
       const codec = createRichMarkdownEditorCodec()
       const editor = new Editor({
         element: null,
@@ -39,7 +40,7 @@ describe('rich markdown blockquote list continuations', () => {
           element: null,
           extensions: createRichMarkdownExtensions({ codec: expectedCodec }),
           content: encodeRawMarkdownHtmlForRichEditor(
-            `> ${marker} first\n> continued`,
+            `> ${marker}first\n> continued`,
             expectedCodec
           ),
           contentType: 'markdown'
@@ -56,18 +57,16 @@ describe('rich markdown blockquote list continuations', () => {
   )
 
   it.each([
-    ['> a. x\nlazy\n> b. y\nlazy2\n', '> 1. x\nlazy\n> 2. y\nlazy2\n'],
-    ['> a. x\nlazy\n> quoted para\n', '> 1. x\nlazy\n> quoted para\n'],
-    ['> a. x\n>    > nested\nlazy', '> 1. x\n>    > nested\nlazy'],
+    ['> 1.\u00a0x\nlazy\n> 2.\u00a0y\nlazy2\n', '> 1. x\nlazy\n> 2. y\nlazy2\n'],
+    ['> 1.\u00a0x\nlazy\n> quoted para\n', '> 1. x\nlazy\n> quoted para\n'],
+    ['> 1.\u00a0x\n>    > nested\nlazy', '> 1. x\n>    > nested\nlazy'],
     [
-      '> a. x\n>    > nested\n>    > more\n> b. y\nlazy',
+      '> 1.\u00a0x\n>    > nested\n>    > more\n> 2.\u00a0y\nlazy',
       '> 1. x\n>    > nested\n>    > more\n> 2. y\nlazy'
     ],
-    ['> a. x\nlazy\n   > y', '> 1. x\nlazy\n   > y'],
-    ['> a.\tx\nlazy\n   > y', '> 1.\tx\nlazy\n   > y'],
+    ['> 1.\u00a0x\nlazy\n   > y', '> 1. x\nlazy\n   > y'],
     // Tiptap reads a 5+ space gap as text, not code; compare with the fully quoted form.
-    ['> a.     x\n>    > nested\nlazy', '> a.     x\n>    > nested\n>    > lazy'],
-    ['> iv. x\n> v. y\n>    > nested\nlazy', '> iv. x\n> v. y\n>    > nested\n>    > lazy']
+    ['> 1.\u00a0    x\n>    > nested\nlazy', '> 1.\u00a0    x\n>    > nested\n>    > lazy']
   ])(
     'ends the continued list at the next quoted line like a numeric list: %j',
     (source, numeric) => {
@@ -89,16 +88,13 @@ describe('rich markdown blockquote list continuations', () => {
 
   // Guards a dependency bump: any item start Tiptap accepts must still reach the fallback.
   it.each([
-    '> \ta. x\nlazy',
-    '>     a. x\nlazy',
-    '> a.\u00a0x\nlazy',
+    '> \t1. x\nlazy',
+    '>     1. x\nlazy',
     '> 1.\u00a0x\nlazy',
-    '> a.\tx\nlazy',
-    '> Mr. Smith\nlazy',
-    '> iv) x\nlazy',
-    '> zz. x\nlazy',
-    '>  > a. x\nlazy',
-    '> a. x\r\nlazy'
+    '> 1.\tx\nlazy',
+    '> 4)\u00a0x\nlazy',
+    '>  > 1.\u00a0x\nlazy',
+    '> 1.\u00a0x\r\nlazy'
   ])('opens %j with whitespace Tiptap accepts but Marked does not', (source) => {
     const editor = openMarkdown(source)
     try {
@@ -109,7 +105,7 @@ describe('rich markdown blockquote list continuations', () => {
   })
 
   it('opens many quoted lazy continuations without nesting each into the last', () => {
-    const editor = openMarkdown('> a. x\nlazy\n'.repeat(1000))
+    const editor = openMarkdown('> 1.\u00a0x\nlazy\n'.repeat(1000))
     try {
       expect(JSON.stringify(editor.getJSON()).match(/"blockquote"/g)).toHaveLength(1)
       expect(editor.getText()).toContain('lazy')
