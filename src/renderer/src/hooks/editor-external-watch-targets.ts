@@ -58,6 +58,7 @@ type WatchedTargetsSnapshot = {
   unwatchedTargetsKey: string
 }
 
+let cachedOwnersKey = ''
 let cachedOpenFiles: AppState['openFiles'] | null = null
 let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
 let cachedRepos: AppState['repos'] | null = null
@@ -150,7 +151,19 @@ export function selectEditorExternalWatchTargets(
 ): WatchedTargetsSnapshot {
   const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || undefined
   const activeWorkspaceExecutionHostId = state.activeWorkspaceExecutionHostId ?? null
+  // Why the store: this selector's narrowed state lacks the catalog the owner lookup reads, and
+  // the owners join the cache key because catalog fields outside it can move them.
+  const catalog = useAppStore.getState()
+  const watchWorktreeIds = new Map<string, string>()
+  for (const file of state.openFiles) {
+    const owner = openFileOwnerWorktreeId(file, catalog)
+    if (owner !== file.worktreeId) {
+      watchWorktreeIds.set(file.id, owner)
+    }
+  }
+  const ownersKey = [...watchWorktreeIds].join('|')
   if (
+    cachedOwnersKey === ownersKey &&
     cachedOpenFiles === state.openFiles &&
     cachedWorktreesByRepo === selectWorktreesByRepo(state) &&
     cachedRepos === state.repos &&
@@ -190,8 +203,7 @@ export function selectEditorExternalWatchTargets(
       : unwatchedConsumersByWorktreeId
     addWatchConsumer(
       consumers,
-      // Why the store: this selector's narrowed state lacks the catalog the owner lookup reads.
-      openFileOwnerWorktreeId(file, useAppStore.getState()),
+      watchWorktreeIds.get(file.id) ?? file.worktreeId,
       getOpenFileWatchConsumer(file)
     )
   }
@@ -244,6 +256,7 @@ export function selectEditorExternalWatchTargets(
   const nextTargets = sortedEntries.map(([, target]) => target)
   const targetsKey = sortedEntries.map(([key]) => key).join('|')
   const unwatchedTargetsKey = [...unwatchedTargetKeys].sort().join('|')
+  cachedOwnersKey = ownersKey
   cachedOpenFiles = state.openFiles
   cachedWorktreesByRepo = selectWorktreesByRepo(state)
   cachedRepos = state.repos

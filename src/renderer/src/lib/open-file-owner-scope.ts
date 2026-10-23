@@ -13,6 +13,7 @@ type OwnerScopedFile = Pick<
   | 'liveTail'
   | 'runtimeEnvironmentId'
   | 'terminalArtifactGrantId'
+  | 'externalSshTargetId'
 >
 
 /**
@@ -32,6 +33,8 @@ export function openFileOwnerScope(
     file.liveTail === true ||
     file.relativePath !== file.filePath ||
     file.terminalArtifactGrantId ||
+    // Why: a direct SSH host's paths are never matched against this computer's catalog.
+    file.externalSshTargetId ||
     isFloatingWorkspaceId(file.worktreeId)
   ) {
     return own

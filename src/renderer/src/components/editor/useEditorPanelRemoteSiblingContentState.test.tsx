@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import type { FileContent } from './editor-panel-content-types'
+import { WORKTREE_OWNER_NOT_READY_ERROR, type FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn(),
@@ -220,6 +220,24 @@ describe('remote sibling editor content routing', () => {
         relativePath: 'docs/readme.md'
       })
     )
+  })
+
+  it('waits for the catalog to name the owner of a restored read-only view', async () => {
+    const activeFile = createOpenFile({
+      id: '/work/repo-b/docs/readme.md',
+      filePath: '/work/repo-b/docs/readme.md',
+      relativePath: '/work/repo-b/docs/readme.md',
+      worktreeId: 'repo-a::/work/repo-a',
+      runtimeEnvironmentId: 'runtime-1',
+      readOnly: true
+    })
+
+    await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
+
+    await vi.waitFor(() =>
+      expect(latestFileContents[activeFile.id]?.loadError).toBe(WORKTREE_OWNER_NOT_READY_ERROR)
+    )
+    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
   })
 
   it('reports a sibling-owner collision instead of remaining in loading state', async () => {

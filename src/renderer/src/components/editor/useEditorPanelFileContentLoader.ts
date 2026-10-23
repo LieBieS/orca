@@ -184,7 +184,12 @@ export function useEditorPanelFileContentLoader({
               !restoredOpenFile.terminalArtifactGrantId &&
               !chatScratchFileAddress(filePath)
             ) {
-              throw new Error('External local files are not available for remote workspaces.')
+              // Why: a restored read-only view waits, bounded, for the catalog to name its owner.
+              throw new Error(
+                restoredOpenFile.readOnly
+                  ? WORKTREE_OWNER_NOT_READY_ERROR
+                  : 'External local files are not available for remote workspaces.'
+              )
             }
             if (!externalSshOwnerId) {
               // Why: a client-local external tab names a client path, so this read must stay off
