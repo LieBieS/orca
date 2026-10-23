@@ -21,6 +21,7 @@ import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/wo
 import { parseWorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { escalateWorkerFailure } from '../../orchestration/worker-failure-escalation'
+import { dispatchReportMailbox } from '../../orchestration/dispatch-report-mailbox'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
@@ -58,7 +59,8 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     exitCode: number,
     cause: TerminalExitCause
   ): void {
-    if (!this._orchestrationDb) {
+    const db = this._orchestrationDb
+    if (!db) {
       return
     }
 
@@ -97,6 +99,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       dispatch,
       {
         from: handle,
+        mailbox: () => dispatchReportMailbox(db, dispatch),
         describe: (task) => ({
           subject: `Agent exited unexpectedly (${errorContext})`,
           body: `Worker ${handle} stopped while running task ${task}. ${errorContext}.${settled?.status === 'circuit_broken' ? ' This task has now failed too many times, so it will not be retried automatically.' : settled?.status === 'failed' ? ' The task is ready to be dispatched again.' : ''}`

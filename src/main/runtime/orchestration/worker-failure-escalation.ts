@@ -5,6 +5,8 @@ import type { DispatchContextRow, MessageRow } from './types'
 export type WorkerFailureEscalation = {
   /** The worker's own handle: the escalation is from it. */
   from: string
+  /** Resolve caller-specific routing inside the failure boundary. Defaults to the owning Run. */
+  mailbox?: () => string
   /** Builds the subject and body around the task's display name, `"<title>" (<task id>)`. */
   describe: (task: string) => { subject: string; body: string }
   payload: Record<string, unknown>
@@ -31,7 +33,7 @@ export function escalateWorkerFailure(
     const active = db.getActiveCoordinatorRun?.()
     const to =
       owningRun && owningRun.legacy !== 1
-        ? `run:${owningRun.id}`
+        ? (escalation.mailbox?.() ?? `run:${owningRun.id}`)
         : (active?.coordinator_handle ?? null)
     if (!to) {
       return null
