@@ -6101,7 +6101,9 @@
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
           "branchFolderPathIdentity": "Branch or folder path",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "showChildWorktrees": "Show children worktrees",
+          "hideChildWorktrees": "Hide children worktrees"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -16709,7 +16711,13 @@
               "notice": "This file changed on disk since this section loaded."
             },
             "notUtf8": {
-              "notice": "Autosave is paused for {{name}} because it isn't UTF-8 text. Save it yourself to convert it to UTF-8."
+              "notice": "Autosave is paused for {{name}} because it isn't UTF-8 text. Saving it yourself rewrites it as UTF-8 and replaces any characters that aren't valid UTF-8.",
+              "refused": "This file isn't UTF-8 text, so it wasn't saved.",
+              "confirm": {
+                "title": "Save {{name}} as UTF-8?",
+                "description": "This file isn't UTF-8 text. Saving it as UTF-8 replaces any characters that aren't valid UTF-8 with �, and the original bytes can't be recovered.",
+                "action": "Save as UTF-8"
+              }
             }
           }
         },
@@ -18723,6 +18731,14 @@
     }
   },
   "components": {
+    "WorkspaceEmptyState": {
+      "title": "What would you like to do?",
+      "description": "No tabs are open here. Start an agent or open a tool to get going.",
+      "startAgent": "Start an agent",
+      "terminal": "Open a terminal",
+      "browser": "Open a browser",
+      "openFile": "Open a file"
+    },
     "onboarding": {
       "flow": {
         "stepTooltip": {
