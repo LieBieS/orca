@@ -55,6 +55,7 @@ export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     /** Lets a test sweep idle chats on its own `tick`. */
     idleSweep?: { idleMs: number; intervalMs: number }
+    now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
     recoveryCapsule?: true
     /** Where the chat runs, when not the default worktree. */
@@ -77,7 +78,7 @@ export async function createQueuedMessageTestRig(
       journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
-      now: () => NOW,
+      now: options.now ?? (() => NOW),
       ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
