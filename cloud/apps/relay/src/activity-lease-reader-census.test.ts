@@ -21,7 +21,8 @@ const ACTIVITY_LEASE_READERS: Record<string, string> = {
   'control-renewal-statement.ts:CONTROL_RENEWAL_BATCH_SQL': 'control-only',
   'idle-regional-rehome-selection.ts:selectIdleRegionalRehomes': 'control-only',
   // Refuses or skips a cell recorded as reserve (or an unreadable set).
-  'assignment-store.ts:cellDeploymentStatus': 'refuses-or-skips-reserve-cells',
+  // Its callers refuse a reserve cell, or skip it (the reserve-aware status).
+  'assignment-store.ts:cellPerHostCounts': 'refuses-or-skips-reserve-cells',
   'assignment-store.ts:cellEvacuationCapacity': 'refuses-or-skips-reserve-cells',
   'assignment-store.ts:releaseExpiredActivity': 'refuses-or-skips-reserve-cells',
   'assignment-store.ts:releaseExpiredActivityLeases': 'refuses-or-skips-reserve-cells',

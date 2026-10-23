@@ -29,6 +29,8 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   verifyCellAssignment: 'connect-path',
   // Sweeps and per-cell host readers: skip reserve-mode cells, or refuse them.
   cellDeploymentStatus: 'refuses-reserve-cells',
+  // Cell-level rows only for a reserve-mode cell: its per-host counts are left out, not zeroed.
+  reserveAwareCellDeploymentStatus: 'omits-host-counts-for-reserve-cells',
   cellEvacuationCapacity: 'refuses-reserve-cells',
   cellEvacuationStatus: 'refuses-reserve-cells',
   evacuateDeadCells: 'skips-reserve-cells',
