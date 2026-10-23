@@ -6,7 +6,10 @@
 import { toast } from 'sonner'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuedMessageDeleteResult
+} from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 const rpc = vi.hoisted(() => vi.fn())
@@ -93,7 +96,14 @@ afterEach(() => {
 })
 
 describe('queued message actions', () => {
-  it.each(['success', 'current', 'obsolete'])('Clear owns ten deletes: %s', async (outcome) => {
+  const clearOutcomes = [
+    'success',
+    'current',
+    'obsolete',
+    'dispatched-current',
+    'dispatched-obsolete'
+  ]
+  it.each(clearOutcomes)('Clear owns ten deletes: %s', async (outcome) => {
     const ids = Array.from({ length: 10 }, (_, index) => `draft-${index + 1}`)
     const release = Promise.withResolvers<void>()
     let active = 0
@@ -102,9 +112,18 @@ describe('queued message actions', () => {
       maximum = Math.max(maximum, ++active)
       await release.promise
       active -= 1
-      return outcome !== 'success' && params.messageId === ids[9]
-        ? { ok: false, refusal: { code: 'agent_session_conflict' } }
-        : { ok: true, value: { deleted: true } }
+      if (outcome === 'success' || params.messageId !== ids[9]) {
+        return { ok: true, value: { deleted: true, messageId: params.messageId } }
+      }
+      return outcome.startsWith('dispatched')
+        ? {
+            ok: true,
+            value: { deleted: false, messageId: params.messageId, disposition: 'dispatched' }
+          }
+        : {
+            ok: false,
+            refusal: { code: 'agent_session_conflict', message: 'The session moved on.' }
+          }
     })
     const harness = createHarness({
       queuedMessages: ids.map((id, index) => draft(id, index + 1))
@@ -118,7 +137,7 @@ describe('queued message actions', () => {
     expect(harness.mutateCalls).toEqual([])
     expect(rpc.mock.calls.map(([, , fields]) => fields.messageId)).toEqual(ids.slice(0, 8))
     expect(harness.result.current.queuePending).toBe('clear')
-    if (outcome === 'obsolete') {
+    if (outcome.endsWith('obsolete')) {
       harness.dispose()
     }
     release.resolve()
@@ -130,8 +149,12 @@ describe('queued message actions', () => {
       expect(fields.envelope).toMatchObject({ sessionId: 'session', expectedRuntimeFence: 3 })
     }
     expect(ids.every((id) => harness.result.current.pending(id) === null)).toBe(true)
-    expect(toast.error).toHaveBeenCalledTimes(outcome === 'current' ? 1 : 0)
+    expect(toast.error).toHaveBeenCalledTimes(outcome.endsWith('current') ? 1 : 0)
+    if (outcome === 'dispatched-current') {
+      expect(toast.error).toHaveBeenCalledWith('This message was already sent.')
+    }
     expect(harness.result.current.queuePending).toBeNull()
+    expect(harness.result.current.clearCapable).toBe(true)
   })
 
   it('keeps Clear all unavailable while a local send has no host card', async () => {
@@ -178,14 +201,32 @@ describe('queued message actions', () => {
     expect(disabled.result.current.steerNewest()).toBe(false)
   })
 
-  it('Delete withdraws through queuedMessageDelete without touching the composer', async () => {
-    const harness = createHarness()
-    await act(() => harness.result.current.remove('draft-1'))
+  it.each(['current', 'obsolete'])('Delete already sent: %s', async (presentation) => {
+    const answer = Promise.withResolvers<AgentSessionQueuedMessageDeleteResult>()
+    const harness = createHarness({ mutateResult: () => answer.promise })
+    let pending: Promise<void> = Promise.resolve()
+    act(() => {
+      pending = harness.result.current.remove('draft-1')
+    })
+    expect(harness.result.current.pending('draft-1')).toBe('delete')
+    expect(harness.result.current.clearCapable).toBe(false)
     expect(harness.mutate).toHaveBeenCalledWith(
       'agentSession.queuedMessageDelete',
       'agentSession.queuedMessageDelete',
       { messageId: 'draft-1' }
     )
+    if (presentation === 'obsolete') {
+      harness.dispose()
+    }
+    await act(async () => {
+      answer.resolve({ deleted: false, messageId: 'draft-1', disposition: 'dispatched' })
+      await pending
+    })
+    expect(vi.mocked(toast.error).mock.calls).toEqual(
+      presentation === 'current' ? [['This message was already sent.']] : []
+    )
+    expect(harness.result.current.pending('draft-1')).toBeNull()
+    expect(harness.result.current.clearCapable).toBe(true)
     expect(readNativeChatDraftCache(SCOPE)).toBe('')
   })
 
