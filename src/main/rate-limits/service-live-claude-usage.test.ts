@@ -3,6 +3,7 @@ import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
+import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import {
   asRateLimitWindow,
   deferred,
@@ -412,6 +413,14 @@ describe('RateLimitService', () => {
       const service = new ObservedRateLimitService()
       const window = new FakeRateLimitWindow()
       service.attach(asRateLimitWindow(window))
+      const activate = async () => {
+        if (trigger === 'mobile') {
+          await service.refreshIfStale()
+        } else {
+          window.emit('focus')
+        }
+        await vi.advanceTimersByTimeAsync(0)
+      }
       await service.refresh()
       await vi.advanceTimersByTimeAsync(60 * 1000)
       const secondRefresh = service.refresh()
@@ -454,16 +463,74 @@ describe('RateLimitService', () => {
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       await vi.advanceTimersByTimeAsync(1)
       // Only Claude is due, despite a fresh equal receipt and fresh other providers.
-      if (trigger === 'mobile') {
-        await service.refreshIfStale()
-      } else {
-        window.emit('focus')
-      }
-      await vi.advanceTimersByTimeAsync(0)
+      await activate()
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
       expect(service.getState().claude?.session?.usedPercent).toBe(8)
       await service.refreshIfStale()
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      // A second failure keeps Claude gated beyond its five-minute check age.
+      const cooldownFetch = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => cooldownFetch.promise)
+      const cooldownRefresh = service.refresh()
+      await flushMicrotasks()
+      const postLive = () =>
+        service.ingestLiveClaudeRateLimits({
+          configDir: null,
+          fiveHour: { used_percentage: 41 },
+          sevenDay: null
+        })
+      postLive()
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      const cooldownCompletedAt = Date.now()
+      const cooldownRetryAtMs = cooldownCompletedAt + 60 * 60 * 1000
+      cooldownFetch.resolve({
+        ...errorProvider('claude', 'rate limited'),
+        usageMetadata: { failureKind: 'rate-limited', retryAtMs: cooldownRetryAtMs }
+      })
+      await cooldownRefresh
+      expect(service.claudeCheckCompletedAt).toBe(cooldownCompletedAt)
+      expect(service.getState().claude?.status).toBe('ok')
+      expect(service.getState().claude?.usageMetadata?.retryAtMs).toBe(cooldownRetryAtMs)
+      const siblingCallsBefore = vi.mocked(fetchCodexRateLimits).mock.calls.length
+      // Legitimately stale siblings refresh during cooldown without stamping Claude.
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1000)
+      await activate()
+      const siblingCalls = siblingCallsBefore + 1
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(siblingCalls)
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      for (let event = 0; event < 3; event += 1) {
+        await vi.advanceTimersByTimeAsync(60 * 1000)
+        postLive()
+        const live = service.getState().claude
+        await activate()
+        expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+        expect(fetchCodexRateLimits).toHaveBeenCalledTimes(siblingCalls)
+        expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(siblingCalls)
+        expect(service.claudeCheckCompletedAt).toBe(cooldownCompletedAt)
+        expect(service.getState().claude).toEqual(live)
+      }
+      // Continuing the sibling scan must still admit independently due work.
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      await activate()
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(siblingCalls + 1)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+      // Freshen siblings just before expiry, so only Claude is due at the deadline.
+      await vi.advanceTimersByTimeAsync(cooldownRetryAtMs - Date.now() - 1)
+      postLive()
+      await activate()
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(siblingCalls + 2)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+      expect(service.claudeCheckCompletedAt).toBe(cooldownCompletedAt)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+      await activate()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(5)
+      expect(service.getState().claude?.session?.usedPercent).toBe(8)
+      expect(service.claudeCheckCompletedAt).toBe(cooldownRetryAtMs)
+      await activate()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(5)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(siblingCalls + 3)
       service.stop()
     } finally {
       vi.useRealTimers()

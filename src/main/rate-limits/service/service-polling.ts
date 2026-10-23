@@ -95,6 +95,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         return { kind: 'full' }
       }
       if (limits.status === 'ok' || limits.status === 'unavailable') {
+        if (provider === 'claude' && this.shouldSkipAutomatedClaudeFetch(limits)) {
+          continue
+        }
         const checkedAt = provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
         if (checkedAt === null || now - checkedAt >= MIN_REFETCH_MS) {
           return { kind: 'full' }
