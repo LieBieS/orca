@@ -14,6 +14,7 @@ import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
+import { useOwnerScopedOpenFile } from './use-owner-scoped-open-file'
 import type { MarkdownRenderState } from './markdown-render-mode'
 
 const noopCloseMarkdownTableOfContents = (): void => {}
@@ -113,7 +114,16 @@ export function EditorContent({
   const pdfPreferenceKey = buildPdfScalePreferenceKey(activeFile)
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)
-  const markdownDocuments = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
+  // Why: a read-only view of another workspace's file (#32158) resolves its links in that workspace,
+  // but takes no notes there; the owner's own tab does.
+  const ownerScopedFile = useOwnerScopedOpenFile(activeFile)
+  const annotationsEnabled = markdownAnnotationsEnabled && ownerScopedFile === activeFile
+  const markdownDocuments = useMarkdownDocuments(
+    ownerScopedFile,
+    isMarkdown,
+    mdViewMode,
+    handleSave
+  )
   const getConflictNavigation = useEditorConflictNavigation()
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
@@ -229,7 +239,7 @@ export function EditorContent({
             initialAnchor={activeFile.markdownPreviewAnchor ?? null}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+            markdownAnnotationsEnabled={annotationsEnabled}
             {...markdownDocuments.previewProps}
           />
         </MarkdownPreviewSizeGate>
@@ -262,7 +272,7 @@ export function EditorContent({
         showMarkdownTableOfContents={showMarkdownTableOfContents}
         showMarkdownFrontmatter={showMarkdownFrontmatter}
         onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
-        markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+        markdownAnnotationsEnabled={annotationsEnabled}
         pendingEditorReveal={pendingEditorReveal}
         markdownDocuments={markdownDocuments}
         getConflictNavigation={getConflictNavigation}
@@ -288,7 +298,7 @@ export function EditorContent({
       isMarkdown={isMarkdown}
       showMarkdownTableOfContents={showMarkdownTableOfContents}
       onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
-      markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+      markdownAnnotationsEnabled={annotationsEnabled}
       markdownDocuments={markdownDocuments}
       onContentChange={handleContentChange}
       onSave={handleSave}

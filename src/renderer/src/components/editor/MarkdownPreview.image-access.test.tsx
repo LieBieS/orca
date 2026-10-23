@@ -112,6 +112,7 @@ describe('MarkdownPreview images', () => {
     })
     container.remove()
     vi.unstubAllGlobals()
+    storeState.openFiles = []
   })
 
   it('reads each image as a resource of the document showing it', () => {
@@ -162,6 +163,5 @@ describe('MarkdownPreview images', () => {
       worktreeId: 'wt-b',
       worktreePath: '/b'
     })
-    storeState.openFiles = []
   })
 })
