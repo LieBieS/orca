@@ -69,8 +69,8 @@ export async function rig(
     )
   let dispatch = assign()
   let enabled = true
-  const notify = vi.fn()
-  const deliver = vi.fn()
+  const notify = vi.fn<(handle: string, messageType: string) => void>()
+  const deliver = vi.fn<(sessionId: string, journal: AgentSessionJournal) => void>()
   const sessions = new StructuredAgentSessionConversations({
     deliver,
     now: () => 0,
