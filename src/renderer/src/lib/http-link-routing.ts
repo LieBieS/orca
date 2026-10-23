@@ -14,6 +14,7 @@ import {
   isHttpLinkBackgroundOpen,
   openLocalHttpLinkTab,
   prepareRemoteHttpLinkTab,
+  resolveHttpLinkBrowserPlacement,
   type HttpLinkBrowserRequestFields,
   type HttpLinkBrowserTabState
 } from './http-link-browser-placement'
@@ -178,11 +179,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
             ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
             : {})
       }).then(
-        (pageId) => {
-          if (fields.focusOnCreate !== false) {
-            focusHttpLinkPage(pageId)
-          }
-        },
+        (pageId) => focusHttpLinkPage(fields.focusOnCreate === false ? null : pageId),
         (error) => {
           toast.error(
             error instanceof Error
@@ -210,8 +207,10 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
       openLocalHttpLinkTab(state, worktreeId, url)
       return
     }
+    // Why placed now: the clicked pane is the active group only until the user clicks elsewhere.
+    const placement = resolveHttpLinkBrowserPlacement(state, worktreeId)
     void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      openLocalHttpLinkTab(storeAccessor?.() ?? state, worktreeId, labeledUrl)
+      openLocalHttpLinkTab(storeAccessor?.() ?? state, worktreeId, labeledUrl, placement)
     })
     return
   }

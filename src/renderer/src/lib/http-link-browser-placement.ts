@@ -72,13 +72,11 @@ export function isHttpLinkBackgroundOpen(
 export function openLocalHttpLinkTab(
   state: HttpLinkBrowserTabState,
   worktreeId: string,
-  url: string
+  url: string,
+  placement = resolveHttpLinkBrowserPlacement(state, worktreeId)
 ): void {
   const background = isHttpLinkBackgroundOpen(state)
-  const tab = state.createBrowserTab(worktreeId, url, {
-    activate: !background,
-    ...resolveHttpLinkBrowserPlacement(state, worktreeId)
-  })
+  const tab = state.createBrowserTab(worktreeId, url, { activate: !background, ...placement })
   if (background) {
     return
   }

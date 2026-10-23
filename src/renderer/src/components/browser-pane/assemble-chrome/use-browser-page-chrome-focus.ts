@@ -228,15 +228,17 @@ export function useBrowserPageChromeFocus({
       }
       // Why: a link's new tab attaches its guest frames after the pane mounts, so the retry
       // budget starts once there is a guest; focus the user moves meanwhile stays where they put it.
-      if (!guestFocus.isAttached() && waitedFrames < GUEST_ATTACH_WAIT_FRAMES) {
+      if (attempts === 0) {
         const active = document.activeElement
         if (active !== focusAtRequest && active !== document.body) {
           settled = true
           return
         }
-        waitedFrames += 1
-        frameId = window.requestAnimationFrame(runFocus)
-        return
+        if (!guestFocus.isAttached() && waitedFrames < GUEST_ATTACH_WAIT_FRAMES) {
+          waitedFrames += 1
+          frameId = window.requestAnimationFrame(runFocus)
+          return
+        }
       }
       attempts += 1
       settled = focusGuestNow()
