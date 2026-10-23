@@ -85,9 +85,26 @@ describe('useOwnerWorkspaceDocumentLinks', () => {
     await result.current.previewProps.onOpenDocument(target)
 
     expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-b', {
-      providesInitialSurface: true
+      providesInitialSurface: true,
+      executionHostId: 'local'
     })
     expect(documents.previewProps.onOpenDocument).toHaveBeenCalledWith(target, undefined)
+  })
+
+  it('keeps the same link handler across re-renders of a view', () => {
+    const view = openFile({
+      filePath: '/b/docs/guide.md',
+      relativePath: '/b/docs/guide.md',
+      readOnly: true
+    })
+    const owner = { ...view, worktreeId: 'wt-b', relativePath: 'docs/guide.md' }
+    const { result, rerender } = renderHook(() =>
+      useOwnerWorkspaceDocumentLinks({ ...documents }, view, owner)
+    )
+    const first = result.current.previewProps.onOpenDocument
+    rerender()
+
+    expect(result.current.previewProps.onOpenDocument).toBe(first)
   })
 
   it("leaves an ordinary tab's links alone", () => {

@@ -3,7 +3,10 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { openFileOwnerScope } from '@/lib/open-file-owner-scope'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 
 /**
@@ -30,21 +33,27 @@ export function useOwnerWorkspaceDocumentLinks(
   viewFile: OpenFile,
   ownerFile: OpenFile
 ): MarkdownDocumentsController {
-  return useMemo(() => {
-    if (ownerFile === viewFile) {
-      return documents
+  const ownerWorktreeId = ownerFile.worktreeId === viewFile.worktreeId ? null : ownerFile.worktreeId
+  const runtimeOwner = ownerFile.runtimeEnvironmentId?.trim()
+  const { previewProps } = documents
+  // Why keyed on previewProps: the controller object is new each render, and the preview rebuilds
+  // its Markdown components whenever onOpenDocument changes.
+  const ownerPreviewProps = useMemo(() => {
+    if (!ownerWorktreeId) {
+      return previewProps
     }
-    const runtimeOwner = ownerFile.runtimeEnvironmentId?.trim()
-    const onOpenDocument: MarkdownDocumentsController['previewProps']['onOpenDocument'] = (
-      document,
-      options
-    ) => {
-      activateAndRevealWorkspace(ownerFile.worktreeId, {
+    const onOpenDocument: typeof previewProps.onOpenDocument = (document, options) => {
+      activateAndRevealWorkspace(ownerWorktreeId, {
         providesInitialSurface: true,
-        ...(runtimeOwner ? { executionHostId: toRuntimeExecutionHostId(runtimeOwner) } : {})
+        executionHostId: runtimeOwner
+          ? toRuntimeExecutionHostId(runtimeOwner)
+          : LOCAL_EXECUTION_HOST_ID
       })
-      return documents.previewProps.onOpenDocument(document, options)
+      return previewProps.onOpenDocument(document, options)
     }
-    return { ...documents, previewProps: { ...documents.previewProps, onOpenDocument } }
-  }, [documents, ownerFile, viewFile])
+    return { ...previewProps, onOpenDocument }
+  }, [ownerWorktreeId, previewProps, runtimeOwner])
+  return ownerPreviewProps === previewProps
+    ? documents
+    : { ...documents, previewProps: ownerPreviewProps }
 }
