@@ -227,6 +227,28 @@ describe('useBrowserPageChromeFocus', () => {
     expect(document.activeElement).toBe(addressBar())
   })
 
+  it('still focuses a guest that attaches long after the tab activates', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    act(() => flushFrames(30))
+    view.rerender(<ChromeHarness isActive />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('drops a pending activation focus once the user focuses another split', () => {
+    const view = render(<ChromeHarness isActive={false} hasGuest={false} />)
+
+    view.rerender(<ChromeHarness isActive hasGuest={false} />)
+    view.rerender(<ChromeHarness isActive hasGuest={false} chromeShortcutScope="inactive" />)
+    view.rerender(<ChromeHarness isActive chromeShortcutScope="inactive" />)
+    act(() => flushFrames())
+
+    expect(document.activeElement).not.toBe(guest())
+  })
+
   it('ignores a pending request while the pane is not the active surface', () => {
     queuePendingAddressBarFocus()
 

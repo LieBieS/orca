@@ -23,6 +23,8 @@ import { useWebviewDragPassthroughActive } from '../host-guest/use-webview-drag-
 
 /** Frames an address-bar grab keeps retrying before it lets the guest have focus back. */
 const ADDRESS_BAR_FOCUS_FRAMES = 6
+/** Frames activation focus waits for a guest: a client-hosted one can attach seconds after its tab activates. */
+const ACTIVATION_GUEST_FOCUS_FRAMES = 300
 
 /**
  * Who owns focus in a browser pane's chrome. Every pane — local, client-hosted and streamed —
@@ -152,12 +154,15 @@ export function useBrowserPageChromeFocus({
 
   /** Retries for a few frames: a pane activated this commit may not have attached its guest yet. */
   const focusGuestOverFrames = useCallback(
-    (stillWanted: () => boolean = () => true): (() => void) => {
+    (
+      stillWanted: () => boolean = () => true,
+      maxFrames = ADDRESS_BAR_FOCUS_FRAMES
+    ): (() => void) => {
       let frameId = 0
       let attempts = 0
       const runFocus = (): void => {
         attempts += 1
-        if (stillWanted() && !focusGuestNow() && attempts < ADDRESS_BAR_FOCUS_FRAMES) {
+        if (stillWanted() && !focusGuestNow() && attempts < maxFrames) {
           frameId = window.requestAnimationFrame(runFocus)
         }
       }
@@ -286,13 +291,16 @@ export function useBrowserPageChromeFocus({
     }
     focusedForActivationRef.current = true
     // Why 'focused' only: never pull the keyboard across splits; floating ones all report 'owned-target'.
-    if (inputLocked || !isSplitFocused() || keepAddressBarFocusRef.current || focusGuestNow()) {
+    const stillWanted = (): boolean =>
+      !inputLocked && isSplitFocused() && !keepAddressBarFocusRef.current
+    if (!stillWanted() || focusGuestNow()) {
       return
     }
     // Why: a late guest must not take focus the user has since moved (Cmd/Ctrl+L, another split).
     const focusedAtActivation = document.activeElement
     return focusGuestOverFrames(
-      () => document.activeElement === focusedAtActivation && !keepAddressBarFocusRef.current
+      () => document.activeElement === focusedAtActivation && stillWanted(),
+      ACTIVATION_GUEST_FOCUS_FRAMES
     )
   }, [dragPassthroughActive, focusGuestNow, focusGuestOverFrames, inputLocked, isActive])
 
