@@ -3553,7 +3553,10 @@
             "downloadOpenWithDefaultApp": "Téléchargez et ouvrez avec l'application par défaut",
             "downloadOpenFailed": "Échec du téléchargement de « {{value0}} ».",
             "openInThisGroup": "Ouvrir dans ce groupe",
-            "openInThisGroupRefused": "Impossible d'ouvrir {{value0}} dans ce groupe"
+            "openInThisGroupRefused": "Impossible d'ouvrir {{value0}} dans ce groupe",
+            "fileInOtherWorkspace": "Ce fichier se trouve dans {{value0}}",
+            "openInOwningWorkspace": "Ouvrir là-bas",
+            "openedHereReadOnly": "Ouvert ici en lecture seule"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Ouvrir l'Analyseur d'espace disque",

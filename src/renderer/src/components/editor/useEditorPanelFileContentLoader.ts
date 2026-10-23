@@ -165,8 +165,14 @@ export function useEditorPanelFileContentLoader({
               ? null
               : findWorkspaceFileRoute(currentState, executionHostId, filePath)
             if (route && route.worktreeId !== worktreeId) {
-              await reownRestoredFile(route, runtimeEnvironmentId ?? null)
-              return
+              if (!restoredOpenFile.readOnly || !runtimeEnvironmentId) {
+                await reownRestoredFile(route, runtimeEnvironmentId ?? null)
+                return
+              }
+              // Why: a read-only view stays where it was opened (#32158); never saved, it needs
+              // no owner move, only the owning workspace's scope on the same server to read.
+              readWorktreeId = route.worktreeId
+              readRelativePath = route.relativePath
             }
             if (
               runtimeEnvironmentId &&

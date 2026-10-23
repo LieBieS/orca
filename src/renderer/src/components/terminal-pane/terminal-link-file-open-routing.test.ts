@@ -11,6 +11,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
+const showHintMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
 const {
   storeState,
@@ -44,6 +45,11 @@ vi.mock('@/lib/connection-context', () => ({
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: findWorkspaceFileRouteMock
+}))
+
+vi.mock('./terminal-file-other-workspace-hint', () => ({
+  dismissFileInOtherWorkspaceHint: vi.fn(),
+  showFileInOtherWorkspaceHint: showHintMock
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -118,50 +124,55 @@ describe('handleOscLink', () => {
     })
   })
 
-  it('opens a sibling folder-workspace path under its owning host and workspace', async () => {
+  it('opens a sibling folder-workspace file read-only here and names its workspace', async () => {
     const filePath = '/sibling/docs/SKILL.md'
-    storeState.openFiles = [{ filePath, worktreeId: 'folder:notes' }]
-    findWorkspaceFileRouteMock.mockReturnValueOnce({
+    const owner = {
       worktreeId: 'folder:notes',
       relativePath: 'docs/SKILL.md',
       executionHostId: 'local'
-    })
-    openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['folder:notes'] = 'owned-skill'
-    })
+    }
+    findWorkspaceFileRouteMock.mockReturnValueOnce(owner)
 
     openDetectedFilePath(filePath, 12, null, deps)
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:notes', {
+    expect(activateAndRevealWorkspace).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true,
       executionHostId: 'local'
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath,
-        relativePath: 'docs/SKILL.md',
-        worktreeId: 'folder:notes'
+        relativePath: filePath,
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        readOnly: true
       }),
       { forceContentReload: true }
     )
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ fileId: 'owned-skill' })
-    )
+    expect(showHintMock).toHaveBeenCalledWith({
+      filePath,
+      owner,
+      runtimeEnvironmentId: null,
+      line: 12,
+      column: null
+    })
   })
 
-  it('leaves ordinary external ownership lookup to the editor loader', async () => {
+  it('opens a file outside every workspace here, editable and without a hint', async () => {
     const filePath = '/external/docs/readme.md'
 
     openDetectedFilePath(filePath, null, null, deps)
     await flushAsyncWork()
 
-    expect(findWorkspaceFileRouteMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, worktreeId: 'wt-1' }),
       { forceContentReload: true }
     )
+    expect(openFileMock.mock.calls[0][0]).not.toHaveProperty('readOnly')
+    expect(showHintMock).not.toHaveBeenCalled()
   })
 
   it('preserves explicit column for Orca opens from :line:column links', async () => {

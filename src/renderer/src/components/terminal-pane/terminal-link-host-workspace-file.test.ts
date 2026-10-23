@@ -8,6 +8,8 @@ import {
   installTerminalLinkTestEnvironment
 } from './terminal-link-handlers-test-harness'
 
+const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn(() => null))
+const showHintMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
 const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
 
@@ -28,6 +30,16 @@ vi.mock('@/lib/connection-context', () => ({
 
 vi.mock('./terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: vi.fn()
+}))
+
+// Why: this client's catalog lacks the host's other workspaces unless a spec says otherwise.
+vi.mock('@/lib/runtime-workspace-file-route', () => ({
+  findWorkspaceFileRoute: findWorkspaceFileRouteMock
+}))
+
+vi.mock('./terminal-file-other-workspace-hint', () => ({
+  dismissFileInOtherWorkspaceHint: vi.fn(),
+  showFileInOtherWorkspaceHint: showHintMock
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -81,6 +93,48 @@ describe('a paired-server link outside its own workspace', () => {
       }),
       { forceContentReload: true }
     )
+  })
+
+  it('views a file in a workspace this client knows read-only here, with a hint', async () => {
+    const owner = {
+      worktreeId: 'wt-main',
+      relativePath: 'src/index.ts',
+      executionHostId: 'runtime:env-1'
+    }
+    findWorkspaceFileRouteMock.mockReturnValueOnce(owner)
+    hostAnswers({
+      worktree: 'wt-main',
+      relativePath: 'src/index.ts',
+      absolutePath: '/repo/src/index.ts',
+      exists: true,
+      isDirectory: false
+    })
+
+    openDetectedFilePath('/repo/src/index.ts', 3, null, featureWorktree)
+    await flushDoubleRaf()
+
+    expect(activateAndRevealWorkspace).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-feat', {
+      providesInitialSurface: true,
+      executionHostId: 'runtime:env-1'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/src/index.ts',
+        relativePath: '/repo/src/index.ts',
+        worktreeId: 'wt-feat',
+        runtimeEnvironmentId: 'env-1',
+        readOnly: true
+      }),
+      { forceContentReload: true }
+    )
+    expect(showHintMock).toHaveBeenCalledWith({
+      filePath: '/repo/src/index.ts',
+      owner,
+      runtimeEnvironmentId: 'env-1',
+      line: 3,
+      column: null
+    })
   })
 
   it("opens the host's spelling of the path so the tab stays a workspace file", async () => {

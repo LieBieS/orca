@@ -3532,7 +3532,10 @@
             "downloadOpenWithDefaultApp": "ダウンロードしてデフォルトのアプリで開く",
             "downloadOpenFailed": "「{{value0}}」のダウンロードに失敗しました。",
             "openInThisGroup": "このグループで開く",
-            "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした"
+            "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした",
+            "fileInOtherWorkspace": "このファイルは {{value0}} にあります",
+            "openInOwningWorkspace": "そこで開く",
+            "openedHereReadOnly": "ここでは読み取り専用で開いています"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "ホストが利用不可",

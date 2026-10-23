@@ -3550,7 +3550,10 @@
             "downloadOpenWithDefaultApp": "Descargar y abrir con la aplicación predeterminada",
             "downloadOpenFailed": "No se pudo descargar '{{value0}}'.",
             "openInThisGroup": "Abrir en este grupo",
-            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo"
+            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo",
+            "fileInOtherWorkspace": "Este archivo está en {{value0}}",
+            "openInOwningWorkspace": "Abrir allí",
+            "openedHereReadOnly": "Abierto aquí en modo de solo lectura"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Anfitrión no disponible",
