@@ -245,16 +245,16 @@ it.each([100, 1000])(
         expect(r.mail()).toHaveLength(1)
         expect(r.mail()[0]?.body).toContain('Grok ended this turn with an error.')
         expect(r.mail()[0]?.body).not.toContain('queued A detail')
-        const child = r.host.collaboratorsForTests().sessions.get(SESSION)?.child
-        if (!child) {
-          throw new Error('ACP acquisition disappeared')
+        const generation = r.host.collaboratorsForTests().sessions.get(SESSION)?.child?.generation
+        if (typeof generation !== 'string') {
+          throw new Error('ACP acquisition generation disappeared')
         }
         expect(
           r.rig.adapter.capturePendingOutput?.({
             sessionId: SESSION,
             clientMessageId: b,
             fence: r.fence(),
-            generation: child.generation
+            generation
           })?.()
         ).toBe(true)
         expect(r.db.getDispatchContextById(r.dispatch.id)?.status).toBe('dispatched')
