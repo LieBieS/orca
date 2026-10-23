@@ -89,13 +89,16 @@ afterEach(() => {
   useAppStore.setState(initial, true)
   Object.assign(window, { api: originalApi })
 })
+function hasPropertyKey<T extends object>(target: T, key: PropertyKey): key is keyof T {
+  return key in target
+}
 function countedTab(tab: Tab): Tab {
   return new Proxy(tab, {
-    get(target, key, receiver) {
+    get(target, key) {
       if (key === 'groupId' || key === 'id') {
         work[work.header ? 'headerVisits' : 'otherVisits']++
       }
-      return Reflect.get(target, key, receiver)
+      return hasPropertyKey(target, key) ? target[key] : undefined
     }
   })
 }
@@ -182,11 +185,11 @@ it.each([10, 100])(
 
 function countedRecords<T>(records: T[]): T[] {
   return new Proxy(records, {
-    get(target, key, receiver) {
+    get(target, key) {
       if (typeof key === 'string' && /^\d+$/.test(key)) {
         work.lookups++
       }
-      return Reflect.get(target, key, receiver)
+      return hasPropertyKey(target, key) ? target[key] : undefined
     }
   })
 }
