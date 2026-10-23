@@ -2,7 +2,6 @@ import { RateLimitServiceFetchTargets } from './service-fetch-targets'
 import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
-  isSameUsageWindow,
   normalizeClaudeConfigDir,
   type ClaudeRuntimeAuthPreparation,
   type ClaudeStatusLineRateLimits,
@@ -10,7 +9,11 @@ import {
   type ProviderRateLimits
 } from './service-types'
 import type { RateLimitWindow } from '../../../shared/rate-limit-types'
-import { isStaleClaudeUsageWindow, mapClaudeUsageWindow } from '../claude-usage-window'
+import {
+  isSameClaudeUsageWindow,
+  isStaleClaudeUsageWindow,
+  mapClaudeUsageWindow
+} from '../claude-usage-window'
 import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 
@@ -46,7 +49,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     return Boolean(limits?.usageMetadata?.retryAtMs && limits.usageMetadata.retryAtMs > Date.now())
   }
 
-  // Why: a live Claude session already streams fresh usage windows; spending the OAuth usage endpoint's tight budget on the same data invites 429s.
+  // Why: a recent live receipt preserves display through a failed check, without proving account freshness.
   protected isLiveClaudeUsageFresh(limits: ProviderRateLimits | null): boolean {
     return Boolean(
       limits?.status === 'ok' &&
@@ -55,19 +58,15 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
   }
 
-  // Why: the statusline never carries the Fable window, so for an account that has one the live feed
-  // cannot stand in for the OAuth poll; only accounts the feed fully covers skip it.
   protected shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
-    return (
-      this.isRetryAfterActive(limits) ||
-      (this.isLiveClaudeUsageFresh(limits) && !limits?.fableWeekly)
-    )
+    return this.isRetryAfterActive(limits)
   }
 
   protected resolveClaudeFetchApply(
     fresh: ProviderRateLimits,
     previous: ProviderRateLimits | null
   ): ProviderRateLimits {
+    this.lastClaudeCheckCompletedAt = fresh.updatedAt
     // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
     // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
     // The 429's Retry-After still has to reach the poll gate, or every cycle re-hits the throttle.
@@ -129,8 +128,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const keepIfNewer = (
       incoming: RateLimitWindow | null,
       current: RateLimitWindow | null | undefined
-    ): RateLimitWindow | null =>
-      incoming && !isStaleClaudeUsageWindow(current, incoming, now) ? incoming : null
+    ): RateLimitWindow | null => {
+      if (!incoming || isStaleClaudeUsageWindow(current, incoming, now)) {
+        return null
+      }
+      return isSameClaudeUsageWindow(current ?? null, incoming) ? (current ?? null) : incoming
+    }
     const incomingSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
     const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
     const freshSession = keepIfNewer(incomingSession, previous?.session)
@@ -145,8 +148,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const droppedStale = (incomingSession && !freshSession) || (incomingWeekly && !freshWeekly)
     if (
       droppedStale &&
-      isSameUsageWindow(previous?.session ?? null, session) &&
-      isSameUsageWindow(previous?.weekly ?? null, weekly)
+      isSameClaudeUsageWindow(previous?.session ?? null, session) &&
+      isSameClaudeUsageWindow(previous?.weekly ?? null, weekly)
     ) {
       return
     }
@@ -154,8 +157,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
       now - previous.updatedAt < LIVE_CLAUDE_INGEST_DEDUPE_MS &&
-      isSameUsageWindow(previous.session, session) &&
-      isSameUsageWindow(previous.weekly, weekly)
+      isSameClaudeUsageWindow(previous.session, session) &&
+      isSameClaudeUsageWindow(previous.weekly, weekly)
     ) {
       return
     }
@@ -166,8 +169,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible
-        // and let its presence keep the OAuth poll ungated (see shouldSkipAutomatedClaudeFetch).
+        // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible.
         fableWeekly: previous?.fableWeekly ?? null,
         updatedAt: Date.now(),
         error: null,
