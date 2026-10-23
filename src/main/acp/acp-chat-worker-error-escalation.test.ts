@@ -1,4 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { performance } from 'node:perf_hooks'
+import type * as AcpLaneModule from './acp-structured-lane'
+import { acpPromptTurnId } from './acp-prompt-turns'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -22,11 +25,27 @@ import {
 } from './acp-structured-host.test-support'
 import { PROVIDER_SESSION, replyChunk, waitFor } from './acp-structured-adapter.test-support'
 
+// Capture the real host-created lane; all translator, admission and polling methods are inherited.
+const lanes = vi.hoisted(() => new Set<AcpLaneModule.AcpStructuredLane>())
+vi.mock('./acp-structured-lane', async (importOriginal) => {
+  const actual = await importOriginal<typeof AcpLaneModule>()
+  return {
+    ...actual,
+    AcpStructuredLane: class extends actual.AcpStructuredLane {
+      constructor(...args: ConstructorParameters<typeof actual.AcpStructuredLane>) {
+        super(...args)
+        lanes.add(this)
+      }
+    }
+  }
+})
+
 const databases: OrchestrationDb[] = []
 const deliveries: Promise<void>[] = []
 afterEach(async () => {
   await Promise.all(deliveries.splice(0))
   vi.restoreAllMocks()
+  lanes.clear()
   await closeProviderTimelineRigs()
   structuredWorkerIdentities.clear()
   for (const db of databases.splice(0)) {
@@ -145,6 +164,136 @@ async function usingAssigned(test: (r: Awaited<ReturnType<typeof assigned>>) => 
 }
 const scenario = (name: string, test: Parameters<typeof usingAssigned>[0]) =>
   it(name, () => usingAssigned(test))
+
+it.each([100, 1000])(
+  'bounds exact-request backlog visits over the fixed budget at %i entries',
+  async (n) => {
+    await usingAssigned(async (r) => {
+      const { frame } = await r.start()
+      const lane = [...lanes].at(-1)
+      if (!lane) {
+        throw new Error('Host did not create its ACP lane')
+      }
+      const samples: { at: number; visits: number }[] = []
+      let active: { at: number; visits: number } | null = null
+      let otherReads = 0
+      let clock = 0
+      const apply = lane.apply.bind(lane)
+      vi.spyOn(lane, 'apply').mockImplementation((events) => {
+        for (const event of events) {
+          const type = event.type
+          Object.defineProperty(event, 'type', {
+            get: () => {
+              if (active) {
+                active.visits++
+              } else {
+                otherReads++
+              }
+              return type
+            }
+          })
+        }
+        apply(events)
+      })
+      const pending = lane.hasPendingDiagnostic.bind(lane)
+      vi.spyOn(lane, 'hasPendingDiagnostic').mockImplementation((id) => {
+        const sample = { at: clock, visits: 0 }
+        active = sample
+        try {
+          return pending(id)
+        } finally {
+          active = null
+          samples.push(sample)
+        }
+      })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      vi.spyOn(performance, 'now').mockImplementation(() => clock)
+      try {
+        r.allow(0)
+        r.end(promptIdOf(frame))
+        await r.rig.settle()
+        // Real grammar admission queues unrelated diagnostics ahead of A's detailed answer.
+        lane.apply(
+          Array.from({ length: n }, (_, index) => ({
+            type: 'item.update' as const,
+            item: `unrelated:${index}`,
+            body: { kind: 'status' as const, text: 'unrelated output' },
+            join: { thread: PROVIDER_SESSION, turn: acpPromptTurnId('unrelated') }
+          }))
+        )
+        const b = await send(r.host, 'B')
+        r.rig.child().agent.fail(frame, -32603, 'Internal error', { details: 'queued A detail' })
+        await r.rig.settle()
+        expect(r.rig.sent('session/prompt')).toHaveLength(2)
+        r.allow(2) // A's generic diagnostic/end commit; the unrelated prefix still blocks its answer.
+        await vi.advanceTimersByTimeAsync(250)
+        await r.rig.settle()
+        expect(r.failure).toHaveBeenCalledTimes(1)
+        expect(r.mail()).toHaveLength(0)
+        expect(samples).toHaveLength(1)
+        otherReads = 0
+        for (clock = 50; clock <= 2000; clock += 50) {
+          await vi.advanceTimersByTimeAsync(50)
+        }
+        await r.rig.settle()
+        expect(samples.map(({ at }) => at)).toEqual(
+          Array.from({ length: 41 }, (_, index) => index * 50)
+        )
+        expect(samples.map(({ visits }) => visits)).toEqual(Array(41).fill(n + 1))
+        expect(samples.reduce((sum, sample) => sum + sample.visits, 0)).toBe(41 * (n + 1))
+        expect(otherReads).toBe(112) // Eight existing backpressure retries inspect only the held first entry.
+        expect(r.mail()).toHaveLength(1)
+        expect(r.mail()[0]?.body).toContain('Grok ended this turn with an error.')
+        expect(r.mail()[0]?.body).not.toContain('queued A detail')
+        const child = r.host.collaboratorsForTests().sessions.get(SESSION)?.child
+        if (!child) {
+          throw new Error('ACP acquisition disappeared')
+        }
+        expect(
+          r.rig.adapter.capturePendingOutput?.({
+            sessionId: SESSION,
+            clientMessageId: b,
+            fence: r.fence(),
+            generation: child.generation
+          })?.()
+        ).toBe(true)
+        expect(r.db.getDispatchContextById(r.dispatch.id)?.status).toBe('dispatched')
+        process.stdout.write(
+          `ACP_PENDING_OPERATIONS ${JSON.stringify({ n, samples, totalVisits: samples.reduce((sum, sample) => sum + sample.visits, 0), otherReads })}\n`
+        )
+      } finally {
+        r.allow(Infinity)
+        lane.retry()
+        await vi.advanceTimersByTimeAsync(2050)
+        vi.useRealTimers()
+      }
+    })
+  }
+)
+
+scenario(
+  'keeps one fallback alert when the same failed request answers with genuinely late detail',
+  async (r) => {
+    const { frame } = await r.start()
+    r.end(promptIdOf(frame))
+    await vi.waitFor(() => expect(r.mail()).toHaveLength(1), { timeout: 3000 })
+    const original = r.mail()[0]
+    expect(original?.body).toContain('Grok ended this turn with an error.')
+    r.rig
+      .child()
+      .agent.fail(frame, -32603, 'Internal error', { details: 'genuinely late A detail' })
+    await r.rig.settle()
+    expect(
+      (await r.host.journalSnapshot(SESSION)).items.some(
+        (item) => item.body.kind === 'status' && item.body.text === 'genuinely late A detail'
+      )
+    ).toBe(true)
+    await Promise.all(deliveries)
+    expect(r.mail()).toEqual([original])
+    expect(r.failure).toHaveBeenCalledTimes(1)
+    expect(r.db.getDispatchContextById(r.dispatch.id)?.status).toBe('dispatched')
+  }
+)
 
 scenario(
   'waits for A’s late saved answer, including A finished before failure capture, without waiting for B',

@@ -31,6 +31,7 @@ import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-s
 import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
+import { countChatFailureOperations } from './chat-worker-error-operation-counts.test-support'
 
 const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 const journals = createTrackedJournalOpener()
@@ -101,6 +102,7 @@ async function rig(capturePendingOutput?: StructuredAgentSessionAdapter['capture
   }
   sessions.set(SESSION, session)
   return {
+    root,
     journal,
     observer,
     sessions,
@@ -120,6 +122,124 @@ async function rig(capturePendingOutput?: StructuredAgentSessionAdapter['capture
     }
   }
 }
+
+it.each([100, 1000])(
+  'bounds real committed observation and one failure with %i saved requests',
+  async (n) => {
+    const r = await rig()
+    r.sessions.delete(SESSION)
+    for (let index = 0; index < n; index++) {
+      await r.journal.appendSubmission({
+        clientMessageId: `history:${index}`,
+        payloadFingerprint: `history:${index}`,
+        body: hostTestMessage('saved input'),
+        fence: 0
+      })
+    }
+    await batch(
+      r.journal,
+      'history',
+      Array.from({ length: n }, (_, index) => turn(`history-turn:${index}`, 'success'))
+    )
+    const ops = await countChatFailureOperations(r.journal, r.root, n)
+    r.sessions.set(SESSION, r.session)
+    const adoption = { ...ops.counts }
+    expect(adoption).toMatchObject({
+      baselineItems: 2 * n,
+      itemLookups: 3 * n,
+      submissionsCopied: n,
+      submissionVisits: n,
+      lineageCopied: 0,
+      lineageVisits: 0,
+      snapshots: 0,
+      projectedItems: 0,
+      orderingComparisons: 0,
+      materializedItems: 0,
+      materializedSubmissions: 0,
+      wordItemReads: 0,
+      wordSubmissionReads: 0,
+      bodyLookups: 0
+    })
+    await batch(r.journal, 'live-turn', [
+      mutation('live-turn', { kind: 'turn', turnId: 'live-turn', state: 'running' })
+    ])
+    ops.reset()
+    // Ten revisions of one live output exercise the real synchronous commit observer.
+    for (let index = 0; index < 10; index++) {
+      await batch(r.journal, `token:${index}`, [
+        mutation(
+          'live-output',
+          {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: `token ${index}` }]
+          },
+          'live-turn'
+        )
+      ])
+    }
+    const incremental = { ...ops.counts }
+    expect(incremental).toEqual({
+      baselineItems: 0,
+      itemLookups: 30,
+      bodyLookups: 10,
+      submissionsCopied: 0,
+      submissionVisits: 0,
+      lineageCopied: 0,
+      lineageVisits: 0,
+      snapshots: 0,
+      projectedItems: 0,
+      orderingComparisons: 0,
+      materializedItems: 0,
+      materializedSubmissions: 0,
+      wordItemReads: 0,
+      wordSubmissionReads: 0
+    })
+    await r.journal.appendSubmission({
+      clientMessageId: 'eligible',
+      payloadFingerprint: 'eligible',
+      body: hostTestMessage('fail'),
+      fence: 0
+    })
+    ops.reset()
+    await batch(r.journal, 'eligible-failure', [
+      mutation('eligible-turn', {
+        kind: 'turn',
+        turnId: 'eligible-turn',
+        state: 'completed',
+        outcome: 'failure',
+        userItemId: agentJournalSubmissionKey('eligible')
+      }),
+      words('eligible-turn', 'exact eligible error')
+    ])
+    await tick()
+    const failure = { ...ops.counts }
+    expect(r.mail()).toHaveLength(1)
+    expect(r.mail()[0]?.body).toContain('exact eligible error')
+    expect(failure).toMatchObject({
+      baselineItems: 0,
+      itemLookups: 4,
+      bodyLookups: 4,
+      submissionsCopied: n + 1,
+      submissionVisits: n + 1,
+      lineageCopied: 2 * n,
+      lineageVisits: 2 * n,
+      snapshots: 1,
+      projectedItems: 2 * n + 5,
+      materializedItems: 2 * n + 5,
+      materializedSubmissions: n + 1,
+      wordItemReads: 4 * n + 11,
+      wordSubmissionReads: n + 1
+    })
+    expect(failure.orderingComparisons).toBeGreaterThanOrEqual(2 * n + 4)
+    expect(failure.orderingComparisons).toBeLessThanOrEqual(
+      (2 * n + 5) * Math.ceil(Math.log2(2 * n + 5))
+    )
+    process.stdout.write(
+      `CHAT_FAILURE_OPERATIONS ${JSON.stringify({ n, adoption, incremental, failure })}\n`
+    )
+  }
+)
 
 function mutation(
   id: string,
