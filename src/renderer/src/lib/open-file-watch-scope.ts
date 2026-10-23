@@ -1,5 +1,4 @@
 import type { OpenFile } from '@/store/slices/editor'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
@@ -23,7 +22,7 @@ type WatchScopedFile = Pick<
  */
 export function openFileWatchScope(
   file: WatchScopedFile,
-  state: AppState = useAppStore.getState()
+  state: AppState
 ): { worktreeId: string; relativePath: string } {
   const own = { worktreeId: file.worktreeId, relativePath: file.relativePath }
   // Why: only a read-only absolute view may sit outside the workspace holding its file; a live-tail
@@ -46,7 +45,10 @@ export function openFileWatchScope(
   return route ? { worktreeId: route.worktreeId, relativePath: route.relativePath } : own
 }
 
-/** The workspace whose watch covers an open file; see {@link openFileWatchScope}. */
-export function openFileWatchWorktreeId(file: WatchScopedFile, state?: AppState): string {
-  return openFileWatchScope(file, state).worktreeId
+/** The workspace whose watch covers an open file; without a catalog, the one it lives in. */
+export function openFileWatchWorktreeId(
+  file: WatchScopedFile,
+  state: AppState | undefined
+): string {
+  return state ? openFileWatchScope(file, state).worktreeId : file.worktreeId
 }

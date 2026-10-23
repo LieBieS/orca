@@ -2,6 +2,7 @@ import { joinPath } from '@/lib/path'
 import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import type { OpenFile } from '@/store/slices/editor'
+import type { AppState } from '@/store/types'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import {
   getLocalWindowsWslPathIdentity,
@@ -10,6 +11,8 @@ import {
 } from '../../../../shared/cross-platform-path'
 
 type WatchScope = {
+  /** Where a read-only cross-workspace view's owner is looked up; without it, views are not matched. */
+  catalog?: AppState
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId: string | null
@@ -121,7 +124,7 @@ class IndexedOpenFileLookup {
     let hasCombinedDiffConsumer = false
     for (const [index, file] of openFiles.entries()) {
       if (
-        openFileWatchWorktreeId(file) !== scope.worktreeId ||
+        openFileWatchWorktreeId(file, scope.catalog) !== scope.worktreeId ||
         openFileRuntimeOwner(file) !== scope.runtimeEnvironmentId
       ) {
         continue

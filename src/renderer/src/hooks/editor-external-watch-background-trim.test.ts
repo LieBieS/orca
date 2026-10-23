@@ -15,7 +15,8 @@ import {
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
 
-vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+// Why a catalog object: the owner lookup reads the store; the route mock below answers it.
+vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn(() => ({})) } }))
 // Why: the catalog says wt1 holds /r/wt1/a.ts.
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: (_state: unknown, _hostId: string, absolutePath: string) =>

@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import { useAppStore, type AppState } from '@/store'
 import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -188,7 +188,12 @@ export function selectEditorExternalWatchTargets(
     const consumers = watchEligibleIds.has(file.worktreeId)
       ? consumersByWorktreeId
       : unwatchedConsumersByWorktreeId
-    addWatchConsumer(consumers, openFileWatchWorktreeId(file), getOpenFileWatchConsumer(file))
+    addWatchConsumer(
+      consumers,
+      // Why the store: this selector's narrowed state lacks the catalog the owner lookup reads.
+      openFileWatchWorktreeId(file, useAppStore.getState()),
+      getOpenFileWatchConsumer(file)
+    )
   }
   const activeWorktreeId = state.activeWorktreeId
   const activeWorktree = activeWorktreeId

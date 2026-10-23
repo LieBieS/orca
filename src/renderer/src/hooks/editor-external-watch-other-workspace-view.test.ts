@@ -62,7 +62,7 @@ describe("a read-only view of another workspace's file", () => {
     const index = indexEditorExternalWatchBatchPaths(
       { worktreePath: '/b', events: [{ kind: 'update', absolutePath: '/b/report.md' }] },
       [view],
-      ownerTarget
+      { ...ownerTarget, catalog: useAppStore.getState() }
     )
 
     expect(index.matchingOpenFiles(index.changes[0])).toEqual([view])
