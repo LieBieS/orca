@@ -401,6 +401,59 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('starts a recreated service without the previous live usage or check cooldown', async () => {
+    vi.useFakeTimers()
+    const previous = new ObservedRateLimitService()
+    let recreated: ObservedRateLimitService | undefined
+    try {
+      const previousCompletedAt = Date.now()
+      const retryAtMs = previousCompletedAt + 60 * 60 * 1000
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...errorProvider('claude', 'rate limited'),
+          usageMetadata: { failureKind: 'rate-limited', retryAtMs }
+        }))
+        .mockImplementationOnce(async () => okProvider('claude', 8))
+      mockFreshBackgroundProviderFetches()
+      await previous.refresh()
+      previous.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 41 },
+        sevenDay: { used_percentage: 25 }
+      })
+      expect(previous.getState().claude).toMatchObject({
+        status: 'ok',
+        session: { usedPercent: 41 },
+        weekly: { usedPercent: 25 },
+        usageMetadata: { source: 'live-session', retryAtMs }
+      })
+      expect(previous.claudeCheckCompletedAt).toBe(previousCompletedAt)
+      previous.stop()
+
+      recreated = new ObservedRateLimitService()
+      expect(recreated.getState().claudeTarget).toEqual(previous.getState().claudeTarget)
+      expect(recreated.getState().claude).toBeNull()
+      expect(recreated.claudeCheckCompletedAt).toBeNull()
+      recreated.attach(asRateLimitWindow(new FakeRateLimitWindow()))
+      recreated.start({ fetchImmediately: false })
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(Date.now()).toBeLessThan(retryAtMs)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(recreated.getState().claude).toMatchObject({
+        status: 'ok',
+        session: { usedPercent: 8 },
+        updatedAt: Date.now()
+      })
+      expect(recreated.getState().claude?.usageMetadata?.retryAtMs).toBeUndefined()
+      expect(recreated.claudeCheckCompletedAt).toBe(Date.now())
+    } finally {
+      previous.stop()
+      recreated?.stop()
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['focus', 'mobile'])('paces %s checks by completion', async (trigger) => {
     vi.useFakeTimers()
     try {
