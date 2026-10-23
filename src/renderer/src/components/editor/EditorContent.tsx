@@ -14,7 +14,10 @@ import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
-import { useOwnerScopedOpenFile } from './use-owner-scoped-open-file'
+import {
+  useOwnerScopedOpenFile,
+  useOwnerWorkspaceDocumentLinks
+} from './use-owner-scoped-open-file'
 import type { MarkdownRenderState } from './markdown-render-mode'
 
 const noopCloseMarkdownTableOfContents = (): void => {}
@@ -118,11 +121,10 @@ export function EditorContent({
   // but takes no notes there; the owner's own tab does.
   const ownerScopedFile = useOwnerScopedOpenFile(activeFile)
   const annotationsEnabled = markdownAnnotationsEnabled && ownerScopedFile === activeFile
-  const markdownDocuments = useMarkdownDocuments(
-    ownerScopedFile,
-    isMarkdown,
-    mdViewMode,
-    handleSave
+  const markdownDocuments = useOwnerWorkspaceDocumentLinks(
+    useMarkdownDocuments(ownerScopedFile, isMarkdown, mdViewMode, handleSave),
+    activeFile,
+    ownerScopedFile
   )
   const getConflictNavigation = useEditorConflictNavigation()
   const activeConflictEntry =

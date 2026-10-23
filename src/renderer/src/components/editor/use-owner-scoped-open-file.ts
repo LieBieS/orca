@@ -2,6 +2,9 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { openFileOwnerScope } from '@/lib/open-file-owner-scope'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import type { useMarkdownDocuments } from './useMarkdownDocuments'
 
 /**
  * The open file as the workspace holding it sees it, for its document features (links, index,
@@ -17,4 +20,31 @@ export function useOwnerScopedOpenFile(file: OpenFile): OpenFile {
         : { ...file, worktreeId, relativePath },
     [file, worktreeId, relativePath]
   )
+}
+
+type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
+
+/** A view's document links open in the workspace holding its file, so that workspace comes forward. */
+export function useOwnerWorkspaceDocumentLinks(
+  documents: MarkdownDocumentsController,
+  viewFile: OpenFile,
+  ownerFile: OpenFile
+): MarkdownDocumentsController {
+  return useMemo(() => {
+    if (ownerFile === viewFile) {
+      return documents
+    }
+    const runtimeOwner = ownerFile.runtimeEnvironmentId?.trim()
+    const onOpenDocument: MarkdownDocumentsController['previewProps']['onOpenDocument'] = (
+      document,
+      options
+    ) => {
+      activateAndRevealWorkspace(ownerFile.worktreeId, {
+        providesInitialSurface: true,
+        ...(runtimeOwner ? { executionHostId: toRuntimeExecutionHostId(runtimeOwner) } : {})
+      })
+      return documents.previewProps.onOpenDocument(document, options)
+    }
+    return { ...documents, previewProps: { ...documents.previewProps, onOpenDocument } }
+  }, [documents, ownerFile, viewFile])
 }

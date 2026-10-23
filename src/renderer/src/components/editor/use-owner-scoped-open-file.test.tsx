@@ -6,6 +6,7 @@ import type { OpenFile } from '@/store/slices/editor'
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector({})
 }))
+vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace: vi.fn() }))
 // Why: the catalog says workspace wt-b holds /b/docs/guide.md.
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: (_state: unknown, _hostId: string, absolutePath: string) =>
@@ -14,7 +15,11 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
       : null
 }))
 
-import { useOwnerScopedOpenFile } from './use-owner-scoped-open-file'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import {
+  useOwnerScopedOpenFile,
+  useOwnerWorkspaceDocumentLinks
+} from './use-owner-scoped-open-file'
 
 function openFile(extra: Partial<OpenFile>): OpenFile {
   return {
@@ -50,5 +55,45 @@ describe('useOwnerScopedOpenFile', () => {
     const { result } = renderHook(() => useOwnerScopedOpenFile(tab))
 
     expect(result.current).toBe(tab)
+  })
+})
+
+describe('useOwnerWorkspaceDocumentLinks', () => {
+  const documents = {
+    markdownDocuments: [],
+    openMarkdownDocument: vi.fn(),
+    onOpenDocLink: vi.fn(),
+    previewProps: { markdownDocuments: [], onOpenDocument: vi.fn(async () => {}) },
+    mdSave: vi.fn()
+  }
+  const target = {
+    filePath: '/b/docs/other.md',
+    relativePath: 'docs/other.md',
+    basename: 'other.md',
+    name: 'other'
+  }
+
+  it("brings the owning workspace forward before a view's link opens there", async () => {
+    const view = openFile({
+      filePath: '/b/docs/guide.md',
+      relativePath: '/b/docs/guide.md',
+      readOnly: true
+    })
+    const owner = { ...view, worktreeId: 'wt-b', relativePath: 'docs/guide.md' }
+    const { result } = renderHook(() => useOwnerWorkspaceDocumentLinks(documents, view, owner))
+
+    await result.current.previewProps.onOpenDocument(target)
+
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-b', {
+      providesInitialSurface: true
+    })
+    expect(documents.previewProps.onOpenDocument).toHaveBeenCalledWith(target, undefined)
+  })
+
+  it("leaves an ordinary tab's links alone", () => {
+    const tab = openFile({})
+    const { result } = renderHook(() => useOwnerWorkspaceDocumentLinks(documents, tab, tab))
+
+    expect(result.current).toBe(documents)
   })
 })
