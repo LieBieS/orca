@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import type { Tab } from '../../../../shared/tab-types'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { makeTabGroup } from '@/store/slices/store-test-helpers'
@@ -285,7 +286,7 @@ it.each([10, 100])(
       repos,
       worktreesByRepo: worktrees
     }
-    const replacements = [
+    const replacements: Partial<AppState>[] = [
       {
         worktreesByRepo: {
           ...worktrees,

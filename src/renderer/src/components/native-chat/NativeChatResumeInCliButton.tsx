@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { translate } from '@/i18n/i18n'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import {
@@ -29,9 +30,11 @@ function createExecutionHostSelector(
   let repos: AppState['repos'] | undefined
   let scope: NativeChatCliForkIdentity['executionHostScope'] | null = null
   return (state: AppState) => {
+    const nextWorktrees = selectWorktreesByRepo(state)
+    const nextFolders = selectFolderWorkspaces(state)
     if (
-      worktrees !== state.worktreesByRepo ||
-      folders !== state.folderWorkspaces ||
+      worktrees !== nextWorktrees ||
+      folders !== nextFolders ||
       groups !== state.projectGroups ||
       repos !== state.repos
     ) {
@@ -40,8 +43,8 @@ function createExecutionHostSelector(
           tab: { id: tabId, worktreeId },
           nativeChat: { sessionId, agent }
         })?.executionHostScope ?? null
-      worktrees = state.worktreesByRepo
-      folders = state.folderWorkspaces
+      worktrees = nextWorktrees
+      folders = nextFolders
       groups = state.projectGroups
       repos = state.repos
     }
