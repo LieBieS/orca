@@ -37,8 +37,6 @@ export type PromptAnswerOutcome =
     }
   | { outcome: 'unknown' }
 
-const ANSWERED_MEMORY = 256
-
 /** One prompt occurrence in one process: a later prompt, or the same one in a new process, differs. */
 function promptIdentity(binding: AgentPromptExpectedBinding, row: AgentStatusIpcPayload): string {
   const facts = [
@@ -62,7 +60,7 @@ class PromptNoLongerPendingError extends Error {
  * refuses even while the agent has not yet reported moving on.
  */
 export class TerminalAgentPromptAnswers {
-  private readonly answered = new Set<string>()
+  private readonly answered = new Map<string, string>()
 
   constructor(private readonly readHookRow: (paneKey: string) => AgentStatusIpcPayload | null) {}
 
@@ -115,7 +113,7 @@ export class TerminalAgentPromptAnswers {
             ) {
               throw new PromptNoLongerPendingError()
             }
-            this.remember(answer.promptId)
+            this.answered.set(target.paneKey, answer.promptId)
             claimed = true
           }
         }
@@ -125,7 +123,9 @@ export class TerminalAgentPromptAnswers {
         return { outcome: 'accepted' }
       }
       if (settlement === 'refused') {
-        this.answered.delete(answer.promptId)
+        if (this.answered.get(target.paneKey) === answer.promptId) {
+          this.answered.delete(target.paneKey)
+        }
         return { outcome: 'refused', reason: 'agent_not_reachable' }
       }
       return { outcome: 'unknown' }
@@ -158,20 +158,10 @@ export class TerminalAgentPromptAnswers {
       return null
     }
     const promptId = promptIdentity(binding, row)
-    if (this.answered.has(promptId)) {
+    if (this.answered.get(target.paneKey) === promptId) {
       return null
     }
     const read = readAgentPromptAnswers(row, target.agent, promptId, target.answerable)
     return read ? { ...read, handle, binding } : null
-  }
-
-  private remember(promptId: string): void {
-    this.answered.add(promptId)
-    if (this.answered.size > ANSWERED_MEMORY) {
-      const oldest = this.answered.values().next().value
-      if (oldest !== undefined) {
-        this.answered.delete(oldest)
-      }
-    }
   }
 }
