@@ -36,6 +36,10 @@ type Answer =
   | { ok: false; refusal: { code: string; message: string } }
 
 const LOST = new Error('the connection dropped before the host answered')
+const CONFLICT = {
+  ok: false,
+  refusal: { code: 'agent_session_conflict', message: 'The chat changed.' }
+} as const
 
 /** The host's ledger: an id it already ran gets that answer again, and nothing runs. */
 function ledgerHost(run: (method: string, params: Params) => Answer) {
@@ -235,7 +239,7 @@ it.each([
   expect(isCurrent()).toBe(false)
 })
 
-it('keeps pending legacy Stops independent across semantic hosts', async () => {
+it.each([false, true])('reports only current host Stops (%s)', async (reportCurrent) => {
   const first = Promise.withResolvers<unknown>()
   mocks.call.mockReturnValueOnce(first.promise).mockResolvedValue({ ok: true, value: 'B' })
   const view = renderHook(
@@ -251,9 +255,29 @@ it('keeps pending legacy Stops independent across semantic hosts', async () => {
   await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
   view.rerender({ environmentId: 'B' })
   expect(await stop(view.result.current)).toBe('B')
+  view.rerender({ environmentId: 'A' })
+  const currentPresses = reportCurrent ? [stop(view.result.current), stop(view.result.current)] : []
+  const raw = view.result.current.write('agentSession.cancel', 'agentSession.cancel', {
+    turnId: 'turn-1'
+  })
+  await vi.waitFor(() =>
+    expect(mocks.hostAnswersRepeatedStops).toHaveBeenCalledTimes(reportCurrent ? 5 : 3)
+  )
+  first.resolve(CONFLICT)
+  expect(await Promise.all([pendingA, ...currentPresses])).toEqual(
+    reportCurrent ? [null, null, null] : [null]
+  )
+  const outcome = await raw
+  expect(outcome).toMatchObject({
+    kind: 'not-done',
+    notice: expect.any(String),
+    failure: { kind: 'refused', code: 'agent_session_conflict' }
+  })
+  expect(mocks.toastError).toHaveBeenCalledTimes(reportCurrent ? 1 : 0)
+  if (reportCurrent && outcome.kind === 'not-done') {
+    expect(mocks.toastError).toHaveBeenCalledWith(outcome.notice)
+  }
   expect(mocks.call.mock.calls.map(([target]) => target.environmentId)).toEqual(['A', 'B'])
-  first.resolve({ ok: true, value: 'A' })
-  expect(await pendingA).toBe('A')
 })
 
 describe('a Stop pressed again, against a host without the quiet repeated Stop', () => {
@@ -292,6 +316,27 @@ describe('a Stop pressed again, against a host without the quiet repeated Stop',
 
     expect(mocks.call).toHaveBeenCalledOnce()
     expect(mocks.toastError).toHaveBeenCalledOnce()
+  })
+
+  it('keeps repeated raw failures truthful without reporting them', async () => {
+    const failure = Promise.withResolvers<unknown>()
+    mocks.call.mockReturnValue(failure.promise)
+    const { current } = render()
+    const writes = [
+      current.write('agentSession.cancel', 'agentSession.cancel', { turnId: 'turn-1' }),
+      current.write('agentSession.cancel', 'agentSession.cancel', { turnId: 'turn-1' })
+    ]
+    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    failure.resolve(CONFLICT)
+    for (const outcome of await Promise.all(writes)) {
+      expect(outcome).toMatchObject({
+        kind: 'not-done',
+        notice: expect.any(String),
+        failure: { kind: 'refused', code: 'agent_session_conflict' }
+      })
+    }
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('sends a new Stop once the first has settled', async () => {

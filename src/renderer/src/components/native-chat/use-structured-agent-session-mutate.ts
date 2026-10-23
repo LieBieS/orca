@@ -29,8 +29,12 @@ export type StructuredAgentSessionWriteOutcome<T> =
   | { kind: 'done'; value: T }
   /** Refused or failed, with what to tell the person and the fact it was worded from. */
   | { kind: 'not-done'; notice: string; failure: AgentSessionWriteFailure }
-  /** Not dispatched, or a joined duplicate Stop whose failure was already reported. */
+  /** Unavailable at entry, so nothing was dispatched. */
   | { kind: 'dropped' }
+
+type ExecutionResult<T> = StructuredAgentSessionWriteOutcome<T> & {
+  reportFailure?: (notice: string) => void
+}
 
 type WriteArgs = [method: string, fingerprintMethod: string, fields: Record<string, unknown>]
 
@@ -67,7 +71,7 @@ function notDone(
   fingerprintMethod: string,
   fields: Record<string, unknown>,
   agentName: string | undefined
-): { kind: 'not-done'; notice: string; failure: AgentSessionWriteFailure } {
+): ExecutionResult<never> {
   return {
     kind: 'not-done',
     notice: agentSessionWriteFailureText(
@@ -75,7 +79,8 @@ function notDone(
       writeKind(fingerprintMethod, fields),
       agentName ? { agentName } : {}
     ),
-    failure
+    failure,
+    reportFailure: toast.error
   }
 }
 
@@ -94,9 +99,7 @@ export function useStructuredAgentSessionMutate(args: {
   capturePresentation: CaptureStructuredAgentSessionPresentation
 } {
   const { agentName, enabled = true, sessionId, stateRef, target } = args
-  const inFlightStops = useRef(
-    new Map<string, Promise<StructuredAgentSessionWriteOutcome<unknown>>>()
-  )
+  const inFlightStops = useRef(new Map<string, Promise<ExecutionResult<unknown>>>())
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
   useLayoutEffect(() => {
@@ -117,7 +120,7 @@ export function useStructuredAgentSessionMutate(args: {
       fields: Record<string, unknown>,
       /** The fence when the press happened, read before any await, so a write never retargets. */
       pressedFence: number
-    ): Promise<StructuredAgentSessionWriteOutcome<T>> => {
+    ): Promise<ExecutionResult<T>> => {
       let result: AgentSessionMutationResult<T>
       try {
         result = await callStructuredAgentSession<AgentSessionMutationResult<T>>(target, method, {
@@ -163,11 +166,11 @@ export function useStructuredAgentSessionMutate(args: {
       return null
     }
     const isCurrent = capturePresentation()
-    const write: StructuredAgentSessionWrite = async <T>(
+    const execute = async <T>(
       method: string,
       fingerprintMethod: string,
       fields: Record<string, unknown>
-    ): Promise<StructuredAgentSessionWriteOutcome<T>> => {
+    ): Promise<ExecutionResult<T>> => {
       if (
         !namesWhatItStops(fingerprintMethod, fields) ||
         (await supportsStructuredAgentSessionQuietRepeatedStop(target))
@@ -178,13 +181,8 @@ export function useStructuredAgentSessionMutate(args: {
       const key = `${hostKey}:${sessionId}:${method}:${JSON.stringify(fields)}`
       const joined = inFlightStops.current.get(key)
       if (joined) {
-        // The first press reports a failure; the one that joined it stays quiet.
-        return joined.then((outcome) =>
-          outcome.kind === 'not-done'
-            ? { kind: 'dropped' }
-            : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key names the method and fields, so the joined promise is this very call and settles to its T.
-              (outcome as StructuredAgentSessionWriteOutcome<T>)
-        )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key names the method and fields, so the joined promise is this very call and settles to its T.
+        return joined as Promise<ExecutionResult<T>>
       }
       const stopping = send<T>(method, fingerprintMethod, fields, pressedFence)
       inFlightStops.current.set(key, stopping)
@@ -197,13 +195,15 @@ export function useStructuredAgentSessionMutate(args: {
       return stopping
     }
     const mutate: StructuredAgentSessionMutate = async <T>(...writeArgs: WriteArgs) => {
-      const outcome = await write<T>(...writeArgs)
+      const outcome = await execute<T>(...writeArgs)
       if (outcome.kind === 'not-done' && isCurrent()) {
-        toast.error(outcome.notice)
+        const report = outcome.reportFailure
+        outcome.reportFailure = undefined
+        report?.(outcome.notice)
       }
       return outcome.kind === 'done' ? outcome.value : null
     }
-    return { target, write, mutate }
+    return { target, write: execute, mutate }
   }, [capturePresentation, enabled, hostKey, send, sessionId, stateRef, target])
 
   const write = useCallback(
