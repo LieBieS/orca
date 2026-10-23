@@ -50,7 +50,7 @@ function news(current: { row: AgentStatusIpcPayload | null }, optIn: boolean) {
 
 describe('TerminalAgentTurnNews opt-ins', () => {
   it('tells a turn start, and a turn its user stopped, only to a listener that opted in', () => {
-    const current = { row: row({ state: 'working' }) as AgentStatusIpcPayload | null }
+    const current: { row: AgentStatusIpcPayload | null } = { row: row({ state: 'working' }) }
     const { turnNews, deps } = news(current, true)
     turnNews.observe(moved('rest', 'working', 'prompt-submitted'))
     expect(deps.started).toHaveBeenCalledWith({ paneKey: PANE, worktreeId: WT, row: current.row })
@@ -61,7 +61,7 @@ describe('TerminalAgentTurnNews opt-ins', () => {
   })
 
   it('tells no stop for a pane that rested without a stopped turn', () => {
-    const current = { row: null as AgentStatusIpcPayload | null }
+    const current: { row: AgentStatusIpcPayload | null } = { row: null }
     const { turnNews, deps } = news(current, true)
     turnNews.observe(moved('working', 'rest', null))
     current.row = row({ state: 'done' })
@@ -70,7 +70,7 @@ describe('TerminalAgentTurnNews opt-ins', () => {
   })
 
   it('reads no extra row for a listener that did not opt in', () => {
-    const current = { row: row({ state: 'working' }) as AgentStatusIpcPayload | null }
+    const current: { row: AgentStatusIpcPayload | null } = { row: row({ state: 'working' }) }
     const { turnNews, readHookRow } = news(current, false)
     turnNews.observe(moved('rest', 'working', 'prompt-submitted'))
     current.row = row({ state: 'done', interrupted: true })
