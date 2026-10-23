@@ -7,9 +7,10 @@ import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
-import { ptyOwnership } from '../provider/ownership-state'
+import { isCurrentPtyExit, ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
@@ -32,6 +33,8 @@ export type PtyWritePayload = {
   id: string
   data: string
   inputKind: TerminalInputKind
+  /** Which lifetime of `id` the sender bound; a local write naming a prior incarnation is dropped. */
+  incarnationId?: string
   /** Accepted-write callers only: wait for the provider's settlement, on any provider. */
   requireWriteSettlement?: true
 }
@@ -187,7 +190,16 @@ export function createPtyWriteInput(deps: {
     value !== null &&
     typeof (value as { id?: unknown }).id === 'string' &&
     (value as { id: string }).id.length > 0 &&
-    typeof (value as { data?: unknown }).data === 'string'
+    typeof (value as { data?: unknown }).data === 'string' &&
+    ((value as { incarnationId?: unknown }).incarnationId === undefined ||
+      isPtyIncarnationId((value as { incarnationId?: unknown }).incarnationId))
+
+  // Why: session-pinned ids are reissued on respawn, so a write carrying a prior
+  // lifetime's incarnation would steer the pty's new owner. Mirrors isCurrentPtyExit.
+  const isStalePtyWrite = (args: PtyWritePayload): boolean =>
+    args.incarnationId !== undefined &&
+    ptyOwnership.get(args.id) === LOCAL_EXECUTION_HOST_ID &&
+    !isCurrentPtyExit({ id: args.id, incarnationId: args.incarnationId })
 
   const isPtyViewportClaimPayload = (value: unknown): value is PtyViewportClaimPayload =>
     typeof value === 'object' &&
@@ -235,6 +247,9 @@ export function createPtyWriteInput(deps: {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
+    if (isStalePtyWrite(args)) {
+      return false
+    }
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
     if (!provider) {
       return false
@@ -248,7 +263,7 @@ export function createPtyWriteInput(deps: {
   }
 
   const writePtyInputSettled = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    if (!ptyOwnership.has(args.id)) {
+    if (isStalePtyWrite(args) || !ptyOwnership.has(args.id)) {
       return false
     }
     const provider = tryGetProviderForPty(args.id)
@@ -261,6 +276,9 @@ export function createPtyWriteInput(deps: {
 
   const writePtyInputAccepted = (args: PtyWritePayload): boolean | Promise<boolean> => {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
+      return false
+    }
+    if (isStalePtyWrite(args)) {
       return false
     }
     if (args.requireWriteSettlement === true) {

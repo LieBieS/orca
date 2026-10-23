@@ -30,7 +30,7 @@ type IpcPtyConnectContext = {
   isExpectedExitCurrent: () => boolean
   ownsPtyId: (id: string) => boolean
   handleExplicitlyClosedConnect?: (id: string) => boolean
-  bind: (id: string) => void
+  bind: (id: string, incarnationId?: string) => void
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
   getCallbacks: () => PtyConnectOptions['callbacks']
@@ -121,7 +121,7 @@ export async function connectIpcPty(
       // buffered exit is the real thing. A fresh spawn's PTY did not exist yet.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
-    context.bind(spawnResult.id)
+    context.bind(spawnResult.id, spawnResult.incarnationId)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
       if (context.isDestroyed()) {

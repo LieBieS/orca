@@ -24,6 +24,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let destroyed = false
   let onAbandonedConnect: ((ptyId: string) => boolean) | undefined
   let ptyId: string | null = null
+  let ptyIncarnationId: string | null = null
   let lifecycleGeneration = 0
   let pendingConnectGeneration: number | null = null
   let lastExitGeneration: number | null = null
@@ -36,8 +37,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => !destroyed && connected && ptyId === id,
-    write: (id, data, inputKind) => window.api.pty.write(id, data, inputKind),
-    writeAccepted: (id, data, inputKind) => window.api.pty.writeAccepted(id, data, inputKind),
+    write: (id, data, inputKind) =>
+      window.api.pty.write(id, data, inputKind, ptyIncarnationId ?? undefined),
+    writeAccepted: (id, data, inputKind) =>
+      window.api.pty.writeAccepted(id, data, inputKind, {
+        incarnationId: ptyIncarnationId ?? undefined
+      }),
     onDrainFailure: (id) => {
       if (ptyId === id) {
         storedCallbacks.onWriteUnavailable?.()
@@ -72,12 +77,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       lastExitGeneration = lifecycleGeneration
       connected = false
       ptyId = null
+      ptyIncarnationId = null
       preconnectInputBuffer?.clear()
     },
     onPtyExit
   })
-  const bind = (id: string): void => {
+  const bind = (id: string, incarnationId?: string): void => {
     ptyId = id
+    ptyIncarnationId = incarnationId ?? null
     connected = true
   }
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
@@ -185,6 +192,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       const id = ptyId
       connected = false
       ptyId = null
+      ptyIncarnationId = null
       handlers.clearAccumulatedState()
       if (id) {
         try {
@@ -210,6 +218,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
       connected = false
       ptyId = null
+      ptyIncarnationId = null
       storedCallbacks = {}
     },
 

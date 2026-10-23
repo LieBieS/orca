@@ -202,6 +202,8 @@ export type PtyTransport = {
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
     existingPtyId: string
+    /** The listed session's lifetime; lets main drop writes pinned to a prior incarnation of a reissued id. */
+    incarnationId?: string
     cols?: number
     rows?: number
     isAlternateScreen?: boolean

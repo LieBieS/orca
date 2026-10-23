@@ -14,7 +14,7 @@ type IpcPtyAttachContext = {
   handlers: IpcPtySessionHandlers
   outputProcessor: ReturnType<typeof createPtyOutputProcessor>
   isDestroyed: () => boolean
-  bind: (id: string) => void
+  bind: (id: string, incarnationId?: string) => void
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyAttachOptions['callbacks']) => void
   setSuppressAttentionEvents: (value: boolean) => void
@@ -28,9 +28,9 @@ export function attachIpcPty(options: PtyAttachOptions, context: IpcPtyAttachCon
   }
 
   const id = options.existingPtyId
-  context.bind(id)
+  context.bind(id, options.incarnationId)
   context.handlers.registerData(id)
-  context.handlers.registerExit(id)
+  context.handlers.registerExit(id, options.incarnationId)
   if (!context.isCurrent(id)) {
     return
   }
