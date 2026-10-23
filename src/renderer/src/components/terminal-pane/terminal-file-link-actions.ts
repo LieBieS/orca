@@ -169,32 +169,30 @@ export function buildFileLinkActions(
         }
       : null
   const secondaryActions = [openInGroupRow, revealRow].filter((row) => row !== null)
-  if (!worktreeRoot && canOpenWithSystemDefault && isHtmlFilePath(mappedPath)) {
-    return {
-      destination: mappedPath,
-      kind: 'file',
-      ...buildHttpLinkActions(localHtmlFileDestinations(), (browserDestination) =>
-        openDetectedFilePath(filePath, line, column, { ...deps, browserDestination })
-      ),
-      ...(secondaryActions.length > 0 ? { secondaryActions } : {})
-    }
-  }
+  const rows =
+    !worktreeRoot && canOpenWithSystemDefault && isHtmlFilePath(mappedPath)
+      ? buildHttpLinkActions(localHtmlFileDestinations(), (browserDestination) =>
+          openDetectedFilePath(filePath, line, column, { ...deps, browserDestination })
+        )
+      : {
+          primary: {
+            label: worktreeRoot
+              ? translate(
+                  'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
+                  'Switch workspace'
+                )
+              : translate(
+                  'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
+                  'Open file'
+                ),
+            run: () => openDetectedFilePath(filePath, line, column, deps)
+          },
+          ...(systemDefaultRow ? { alternate: systemDefaultRow } : {})
+        }
   return {
     destination: mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
-    primary: {
-      label: worktreeRoot
-        ? translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
-            'Switch workspace'
-          )
-        : translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
-            'Open file'
-          ),
-      run: () => openDetectedFilePath(filePath, line, column, deps)
-    },
-    ...(systemDefaultRow ? { alternate: systemDefaultRow } : {}),
+    ...rows,
     ...(secondaryActions.length > 0 ? { secondaryActions } : {})
   }
 }

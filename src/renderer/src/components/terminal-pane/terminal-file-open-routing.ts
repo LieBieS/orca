@@ -56,6 +56,7 @@ type TerminalFileOpenDeps = {
   worktreePath: string
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
+  /** Shift+modifier: the OS default app, or the other link-routing browser for a local HTML file. */
   openWithSystemDefault?: boolean
   /** Where a local HTML file opens, chosen from its popover; otherwise link routing decides. */
   browserDestination?: HttpLinkDestination
