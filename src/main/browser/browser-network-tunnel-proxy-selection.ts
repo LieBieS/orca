@@ -34,12 +34,7 @@ export function selectBrowserNetworkTunnelProxy(
   const bypassRules = fromSettings
     ? normalizeProxyBypassRules(settings?.httpProxyBypassRules)
     : getProxyBypassRulesFromEnvironment(env)
-  if (
-    // Why: Chromium never proxies loopback, and the host's own browser sessions follow it.
-    isEligibleLocalCertificateHost(target.host) ||
-    isLoopbackAddress(target.host) ||
-    matchesProxyBypassRules(target, bypassRules, fromSettings ? 'chromium' : 'no-proxy')
-  ) {
+  if (matchesProxyBypassRules(target, bypassRules, fromSettings ? 'chromium' : 'no-proxy')) {
     return { kind: 'direct' }
   }
   const url = new URL(proxyUrl)
@@ -53,15 +48,19 @@ export function selectBrowserNetworkTunnelProxy(
 }
 
 // Why a BlockList: the SOCKS front end hands over IPv6 expanded (`0:0:0:0:0:0:0:1`), not as `::1`.
-const LOOPBACK_ADDRESSES = new BlockList()
-LOOPBACK_ADDRESSES.addSubnet('127.0.0.0', 8, 'ipv4')
-LOOPBACK_ADDRESSES.addAddress('::1', 'ipv6')
-LOOPBACK_ADDRESSES.addSubnet('::ffff:127.0.0.0', 104, 'ipv6')
+const IMPLICIT_BYPASS_ADDRESSES = new BlockList()
+IMPLICIT_BYPASS_ADDRESSES.addSubnet('127.0.0.0', 8, 'ipv4')
+IMPLICIT_BYPASS_ADDRESSES.addAddress('::1', 'ipv6')
+IMPLICIT_BYPASS_ADDRESSES.addSubnet('::ffff:127.0.0.0', 104, 'ipv6')
+IMPLICIT_BYPASS_ADDRESSES.addSubnet('169.254.0.0', 16, 'ipv4')
+IMPLICIT_BYPASS_ADDRESSES.addSubnet('fe80::', 10, 'ipv6')
 
-function isLoopbackAddress(host: string): boolean {
-  const address = normalizeHost(host)
-  const family = isIP(address)
-  return family !== 0 && LOOPBACK_ADDRESSES.check(address, family === 4 ? 'ipv4' : 'ipv6')
+// Chromium never proxies localhost, loopback or link-local unless `<-loopback>` subtracts them.
+function matchesImplicitBypassRules(host: string): boolean {
+  const family = isIP(host)
+  return family === 0
+    ? isEligibleLocalCertificateHost(host)
+    : IMPLICIT_BYPASS_ADDRESSES.check(host, family === 4 ? 'ipv4' : 'ipv6')
 }
 
 function normalizeHost(host: string): string {
@@ -70,8 +69,9 @@ function normalizeHost(host: string): string {
 }
 
 /**
- * Bypass rules: `*`, `<local>`, `.suffix`/`*suffix`, `host:port`, IPv4 CIDR. A bare host is exact
- * in Orca's setting (Chromium reads it so) and covers subdomains in NO_PROXY (curl/Go/Python).
+ * Bypass rules: `*`, `<local>`, `<-loopback>`, `.suffix`/`*suffix`, `host:port`, IP literals,
+ * CIDR. A bare host is exact in Orca's setting (Chromium reads it so) and covers subdomains in
+ * NO_PROXY (curl/Go/Python). As in Chromium, the last matching rule wins, then implicit rules.
  */
 export function matchesProxyBypassRules(
   target: Pick<BrowserNetworkTunnelOpen, 'host' | 'port'>,
@@ -79,11 +79,15 @@ export function matchesProxyBypassRules(
   style: 'chromium' | 'no-proxy'
 ): boolean {
   const host = normalizeHost(target.host)
-  return rules
+  const implicit = matchesImplicitBypassRules(host)
+  const decisive = rules
     .split(';')
     .map((rule) => rule.trim().toLowerCase())
     .filter(Boolean)
-    .some((rule) => matchesBypassRule(host, target.port, rule, style))
+    .findLast((rule) =>
+      rule === '<-loopback>' ? implicit : matchesBypassRule(host, target.port, rule, style)
+    )
+  return decisive === undefined ? implicit : decisive !== '<-loopback>'
 }
 
 const SCHEME_PORTS: Record<string, string> = { http: '80', ws: '80', https: '443', wss: '443' }
@@ -116,6 +120,10 @@ function matchesBypassRule(
   }
   if (rulePort !== undefined && Number(rulePort) !== port) {
     return false
+  }
+  const ruleFamily = isIP(ruleHost)
+  if (ruleFamily !== 0) {
+    return matchesCidr(host, ruleHost, ruleFamily === 4 ? 32 : 128)
   }
   const pattern = stripTrailingDot(ruleHost.startsWith('.') ? `*${ruleHost}` : ruleHost)
   if (pattern.includes('*')) {
