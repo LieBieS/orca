@@ -1,36 +1,21 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
+  SESSION,
+  tick,
+  rig,
+  mutation,
+  turn,
+  words,
+  batch
+} from './chat-worker-request-failure-rig.test-fixture'
+import { expect, it, vi } from 'vitest'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
-import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import type { JournalLifecycleMutationInput } from '../../native-chat/agent-session-journal/journal-row-builders'
-import { StructuredAgentSessionConversations } from '../../native-chat/agent-session-wire/structured-agent-session-conversations'
 import { recordStructuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure-row'
-import { StructuredAgentSessionRequestFailures } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
-import type {
-  StructuredAgentSessionHostSession,
-  StructuredAgentSessionEndedChild
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-types'
-import {
-  hostTestAttachParams,
-  hostTestMessage
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { OrchestrationDb } from './db'
-import { createRootDispatch } from './db/root-dispatch-test-fixture'
-import { escalateChatWorkerError } from './chat-worker-error-escalation'
+import type { StructuredAgentSessionEndedChild } from '../../native-chat/agent-session-wire/structured-agent-session-host-types'
+import { hostTestMessage } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { countChatFailureOperations } from './chat-worker-error-operation-counts.test-support'
 import { settleStructuredAgentSessionChildExit } from '../../native-chat/agent-session-wire/structured-agent-session-child-exit'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -38,96 +23,6 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
-
-const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
-const journals = createTrackedJournalOpener()
-const roots: string[] = []
-const databases: OrchestrationDb[] = []
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve))
-afterEach(async () => {
-  vi.restoreAllMocks()
-  await tick()
-  await journals.closeAll()
-  for (const database of databases.splice(0)) {
-    database.close()
-  }
-  for (const root of roots.splice(0)) {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-async function rig(capturePendingOutput?: StructuredAgentSessionAdapter['capturePendingOutput']) {
-  const root = await mkdtemp(join(tmpdir(), 'orca-pr31941-requests-'))
-  roots.push(root)
-  const journal = await journals.open({
-    stateDirectory: root,
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'host-1',
-      agent: 'codex',
-      providerHandle: codexProviderHandle('thread-1')
-    }
-  })
-  const db = new OrchestrationDb(':memory:')
-  databases.push(db)
-  const run = db.createRun({
-    objective: 'ship',
-    coordinatorHandle: 'term_coordinator',
-    coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
-  })
-  const assign = () =>
-    createRootDispatch(
-      db,
-      db.createTask({ spec: 'work', runId: run.id }).id,
-      formatOrcaSessionAddress(SESSION)
-    )
-  let dispatch = assign()
-  let enabled = true
-  const notify = vi.fn()
-  const deliver = vi.fn()
-  const sessions = new StructuredAgentSessionConversations({
-    deliver,
-    now: () => 0,
-    logger: recordingStructuredAgentSessionLogger().logger,
-    observe: (...args) => observer.observe(...args),
-    forget: (id) => observer.forget(id)
-  })
-  const observer = new StructuredAgentSessionRequestFailures({
-    sessions,
-    capturePendingOutput,
-    wordsContext: () => ({ agentName: 'Codex', retryControl: true }),
-    onFailure: (failure) => {
-      void escalateChatWorkerError(failure, { db: () => db, enabled: () => enabled, notify })
-    }
-  })
-  const session: StructuredAgentSessionHostSession = {
-    journal,
-    params: hostTestAttachParams(null),
-    child: null
-  }
-  sessions.set(SESSION, session)
-  return {
-    root,
-    journal,
-    observer,
-    sessions,
-    session,
-    db,
-    notify,
-    deliver,
-    mail: () => db.getUnreadRunMailbox(run.id, 100, ['escalation']),
-    enabled: (value: boolean) => {
-      enabled = value
-    },
-    dispatch: () => dispatch,
-    unassign: () => db.completeDispatch(dispatch.id),
-    reassign: () => {
-      db.completeDispatch(dispatch.id)
-      dispatch = assign()
-    }
-  }
-}
 
 it.each([100, 1000])(
   'bounds real committed observation and one failure with %i saved requests',
@@ -334,30 +229,6 @@ it.each([100, 1000])('bounds the native root-end scan with %i saved items', asyn
     vi.restoreAllMocks()
   }
 })
-
-function mutation(
-  id: string,
-  body: AgentJournalItemBody,
-  turnId?: string
-): Extract<JournalLifecycleMutationInput, { kind: 'item' }> {
-  return {
-    kind: 'item',
-    itemId: id,
-    body,
-    turnScope: turnId ? { kind: 'turn', turnItemId: turnId } : AGENT_JOURNAL_THREAD_SCOPE
-  }
-}
-const turn = (id: string, outcome: 'failure' | 'success'): JournalLifecycleMutationInput =>
-  mutation(id, { kind: 'turn', turnId: id, state: 'completed', outcome })
-const words = (id: string, text: string): JournalLifecycleMutationInput =>
-  mutation(`error:${id}`, { kind: 'status', tone: 'error', text }, id)
-async function batch(
-  journal: AgentSessionJournal,
-  id: string,
-  mutations: JournalLifecycleMutationInput[]
-) {
-  await journal.appendLifecycleBatch({ settlementId: id, fence: 0, mutations })
-}
 
 it('captures every failed request before latest-only publication, despite owed work and pending prompts', async () => {
   const r = await rig()
