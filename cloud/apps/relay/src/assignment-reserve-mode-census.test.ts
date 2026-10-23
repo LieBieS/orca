@@ -88,6 +88,7 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   recordCellHeartbeat: 'cell-level',
   recordCellRegionalRehomeStatus: 'cell-level',
   regionCatalog: 'cell-level',
+  regionRehomeSwitch: 'cell-level',
   regionCorrectionOutcomes: 'cell-level',
   regionalRehomeFleetSafety: 'cell-level',
   releaseExpiredRegionPreferences: 'cell-level',
