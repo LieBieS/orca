@@ -46,3 +46,11 @@ export function hostNamedOtherWorkspaceOwner(
   )
   return owner?.worktreeId === linkOwner.worktreeId ? owner : null
 }
+
+/** A view here of the owner's file: stamped with its host, never saved here, watched with its owner. */
+export function otherWorkspaceViewFields(
+  owner: RuntimeWorkspaceFileRoute | null,
+  runtimeEnvironmentId: string | null
+): { readOnly?: true; watchWorktreeId?: string; runtimeEnvironmentId?: string | null } {
+  return owner ? { readOnly: true, watchWorktreeId: owner.worktreeId, runtimeEnvironmentId } : {}
+}

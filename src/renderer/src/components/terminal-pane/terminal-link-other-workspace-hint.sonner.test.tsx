@@ -102,7 +102,8 @@ describe('a terminal file link clicked in workspace A', () => {
         filePath: '/b/report.md',
         relativePath: '/b/report.md',
         worktreeId: 'wt-a',
-        readOnly: true
+        readOnly: true,
+        watchWorktreeId: 'wt-b'
       }),
       { forceContentReload: true }
     )

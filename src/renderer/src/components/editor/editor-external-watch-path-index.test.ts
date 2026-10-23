@@ -52,6 +52,27 @@ describe('editor external watch path batch index', () => {
     expect(index.matchingOpenFiles(index.changes[1])).toEqual([nested])
   })
 
+  it("routes an owner's update to a read-only view of it in another workspace", () => {
+    const scope = { worktreeId: 'wt-b', worktreePath: '/b', runtimeEnvironmentId: null }
+    const view = file({
+      id: 'view',
+      worktreeId: 'wt-a',
+      filePath: '/b/report.md',
+      relativePath: '/b/report.md',
+      readOnly: true,
+      watchWorktreeId: 'wt-b'
+    })
+    const index = indexEditorExternalWatchBatchPaths(
+      {
+        worktreePath: scope.worktreePath,
+        events: [{ kind: 'update', absolutePath: view.filePath }]
+      },
+      [view],
+      scope
+    )
+    expect(index.matchingOpenFiles(index.changes[0])).toEqual([view])
+  })
+
   it('matches UNC aliases for updates, deletes, and restored tombstones', () => {
     const restored = file({
       id: 'restored',

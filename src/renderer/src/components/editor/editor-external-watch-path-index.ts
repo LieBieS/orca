@@ -120,7 +120,7 @@ class IndexedOpenFileLookup {
     let hasCombinedDiffConsumer = false
     for (const [index, file] of openFiles.entries()) {
       if (
-        file.worktreeId !== scope.worktreeId ||
+        (file.watchWorktreeId ?? file.worktreeId) !== scope.worktreeId ||
         openFileRuntimeOwner(file) !== scope.runtimeEnvironmentId
       ) {
         continue

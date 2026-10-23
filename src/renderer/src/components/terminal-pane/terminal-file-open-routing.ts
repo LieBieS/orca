@@ -34,7 +34,8 @@ import {
 } from './terminal-file-other-workspace-hint'
 import {
   hostNamedOtherWorkspaceOwner,
-  otherWorkspaceFileOwner
+  otherWorkspaceFileOwner,
+  otherWorkspaceViewFields
 } from './terminal-file-other-workspace-owner'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 
@@ -328,14 +329,12 @@ export function openDetectedFilePath(
         filePath: mappedFilePath,
         relativePath,
         worktreeId: worktreeId || '',
-        runtimeEnvironmentId: clientLocal
-          ? null
-          : otherWorkspaceOwner
-            ? runtimeOwnerId
-            : runtimeEnvironmentId,
+        runtimeEnvironmentId: clientLocal ? null : runtimeEnvironmentId,
         // Why: a tab's owner must match its workspace's to be editable; this one is this computer's,
         // or another workspace's, which "Open there" edits under its own owner.
-        ...(clientLocal || otherWorkspaceOwner ? { readOnly: true } : {}),
+        ...(clientLocal
+          ? { readOnly: true }
+          : otherWorkspaceViewFields(otherWorkspaceOwner, runtimeOwnerId)),
         // Why: the grant is the only authority to read a host file outside its workspaces.
         ...(hostGrantId !== null ? { readOnly: true, terminalArtifactGrantId: hostGrantId } : {}),
         // Why: absolute SSH paths outside the worktree otherwise look identical

@@ -46,6 +46,8 @@ export type OpenFile = {
   externalSshTargetId?: string
   /** Host grant for a read-only file outside every workspace on `runtimeEnvironmentId`; never persisted. */
   terminalArtifactGrantId?: string
+  /** Read-only view of a file another workspace on its host holds: watched with that workspace. Not persisted. */
+  watchWorktreeId?: string
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance
   /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */

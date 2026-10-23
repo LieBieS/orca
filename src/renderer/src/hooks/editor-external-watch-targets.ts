@@ -187,7 +187,11 @@ export function selectEditorExternalWatchTargets(
     const consumers = watchEligibleIds.has(file.worktreeId)
       ? consumersByWorktreeId
       : unwatchedConsumersByWorktreeId
-    addWatchConsumer(consumers, file.worktreeId, getOpenFileWatchConsumer(file))
+    addWatchConsumer(
+      consumers,
+      file.watchWorktreeId ?? file.worktreeId,
+      getOpenFileWatchConsumer(file)
+    )
   }
   const activeWorktreeId = state.activeWorktreeId
   const activeWorktree = activeWorktreeId

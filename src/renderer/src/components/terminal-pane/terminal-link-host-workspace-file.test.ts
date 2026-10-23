@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
+import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -8,7 +9,9 @@ import {
   installTerminalLinkTestEnvironment
 } from './terminal-link-handlers-test-harness'
 
-const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn(() => null))
+const findWorkspaceFileRouteMock = vi.hoisted(() =>
+  vi.fn<() => RuntimeWorkspaceFileRoute | null>(() => null)
+)
 const showHintMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
 const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
@@ -96,7 +99,7 @@ describe('a paired-server link outside its own workspace', () => {
   })
 
   it('views a file in a workspace this client knows read-only here, with a hint', async () => {
-    const owner = {
+    const owner: RuntimeWorkspaceFileRoute = {
       worktreeId: 'wt-main',
       relativePath: 'src/index.ts',
       executionHostId: 'runtime:env-1'

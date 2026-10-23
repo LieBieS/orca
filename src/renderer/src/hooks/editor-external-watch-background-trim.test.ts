@@ -109,6 +109,22 @@ describe('background workspace watch trim', () => {
     expect(watchedIds(state)).toEqual(['wt0', 'wt2', 'wt3', 'wt4'])
   })
 
+  it("watches a read-only view of another workspace's file with that workspace", () => {
+    const state = makeState({
+      worktrees,
+      openFiles: [
+        tab('wt0', {
+          filePath: '/r/wt1/a.ts',
+          relativePath: '/r/wt1/a.ts',
+          readOnly: true,
+          watchWorktreeId: 'wt1'
+        })
+      ],
+      activeWorktreeId: 'wt0'
+    })
+    expect(watchedIds(state)).toEqual(['wt1'])
+  })
+
   it('does not let a deleted workspace hold a warm slot', () => {
     const state = makeState({
       worktrees,
