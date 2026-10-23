@@ -41,6 +41,7 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
+import { RuntimeRpcFailureError } from './runtime/types'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
@@ -52,6 +53,54 @@ describe('orca cli worktree awareness', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
+  })
+
+  it('identifies unsupported folder parents and avoids blaming the child for missing parents', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    const child = 'id:repo::/tmp/repo/child'
+    try {
+      for (const parent of ['folder:folder-1', 'id:folder:folder-1']) {
+        logSpy.mockClear()
+        await main(
+          ['worktree', 'set', '--worktree', child, '--parent-worktree', parent, '--json'],
+          '/tmp/repo'
+        )
+        expect(callMock).not.toHaveBeenCalled()
+        const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
+        expect(output.message).toContain(`Parent selector "${parent}" is a folder.`)
+        expect(output.message).toContain(
+          'Folder parents are accepted only by orca worktree create.'
+        )
+        expect(process.exitCode).toBe(1)
+      }
+
+      callMock.mockRejectedValueOnce(
+        new RuntimeRpcFailureError({
+          id: 'req_missing_parent',
+          ok: false,
+          error: { code: 'selector_not_found', message: 'selector_not_found' }
+        })
+      )
+      logSpy.mockClear()
+      await main(
+        ['worktree', 'set', '--worktree', child, '--parent-worktree', 'name:missing', '--json'],
+        '/tmp/repo'
+      )
+      const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
+      expect(output.data.nextSteps.join(' ')).toContain('parent selector "name:missing"')
+      expect(output.data.nextSteps.join(' ')).toContain(
+        'The server did not identify which selector failed.'
+      )
+      expect(output.data.nextSteps.join(' ')).not.toContain(
+        'No Orca workspace matched the worktree selector'
+      )
+      expect(process.exitCode).toBe(1)
+      expect(errSpy).not.toHaveBeenCalled()
+    } finally {
+      process.exitCode = priorExitCode
+    }
   })
 
   it('uses cwd when active is passed to worktree.set', async () => {
