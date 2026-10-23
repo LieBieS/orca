@@ -23,6 +23,7 @@ const dependencyExports: [string, string[]][] = [
     ['shutdownPairedRuntimeBrowserClientHosts']
   ],
   ['../browser/browser-manager', ['browserManager']],
+  ['../browser/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
   ['../git/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],

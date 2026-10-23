@@ -2,6 +2,7 @@ import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
 import {
   acquireBrowserAutomationVisibility,
@@ -147,6 +148,11 @@ export function registerBrowserStateIpcBridge(
         url,
         activate: activate ?? true
       })
+    })
+  )
+  unsubs.push(
+    window.api.browser.onSessionProfilesChanged(() => {
+      void useAppStore.getState().fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
     })
   )
 }
