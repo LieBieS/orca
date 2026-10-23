@@ -1,4 +1,5 @@
 import type { AppState } from '@/store'
+import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -187,11 +188,7 @@ export function selectEditorExternalWatchTargets(
     const consumers = watchEligibleIds.has(file.worktreeId)
       ? consumersByWorktreeId
       : unwatchedConsumersByWorktreeId
-    addWatchConsumer(
-      consumers,
-      file.watchWorktreeId ?? file.worktreeId,
-      getOpenFileWatchConsumer(file)
-    )
+    addWatchConsumer(consumers, openFileWatchWorktreeId(file), getOpenFileWatchConsumer(file))
   }
   const activeWorktreeId = state.activeWorktreeId
   const activeWorktree = activeWorktreeId

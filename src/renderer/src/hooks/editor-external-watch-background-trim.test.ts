@@ -16,6 +16,13 @@ import {
 } from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+// Why: the catalog says wt1 holds /r/wt1/a.ts.
+vi.mock('@/lib/runtime-workspace-file-route', () => ({
+  findWorkspaceFileRoute: (_state: unknown, _hostId: string, absolutePath: string) =>
+    absolutePath === '/r/wt1/a.ts'
+      ? { worktreeId: 'wt1', relativePath: 'a.ts', executionHostId: 'local' }
+      : null
+}))
 
 type Repo = EditorExternalWatchTargetState['repos'][number]
 type Worktree = EditorExternalWatchTargetState['worktreesByRepo'][string][number]
@@ -116,8 +123,7 @@ describe('background workspace watch trim', () => {
         tab('wt0', {
           filePath: '/r/wt1/a.ts',
           relativePath: '/r/wt1/a.ts',
-          readOnly: true,
-          watchWorktreeId: 'wt1'
+          readOnly: true
         })
       ],
       activeWorktreeId: 'wt0'

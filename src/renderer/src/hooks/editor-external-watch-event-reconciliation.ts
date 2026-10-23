@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import { basename } from '@/lib/path'
 import { canAutoSaveOpenFile } from '@/components/editor/editor-autosave'
@@ -165,7 +166,7 @@ export function buildEditorExternalWatchEventHandler(
       const state = useAppStore.getState()
       for (const file of state.openFiles) {
         if (
-          file.worktreeId === target.worktreeId &&
+          openFileWatchWorktreeId(file) === target.worktreeId &&
           getOpenFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           (file.externalMutation === 'deleted' || file.externalMutation === 'renamed') &&
@@ -271,7 +272,7 @@ function hasRenameCorrelatedCreate(
   const deletedBasenames = new Set<string>()
   for (const file of openFiles) {
     if (
-      file.worktreeId !== worktreeId ||
+      openFileWatchWorktreeId(file) !== worktreeId ||
       (file.mode !== 'edit' && file.mode !== 'markdown-preview') ||
       !deletedIdSet.has(file.id)
     ) {

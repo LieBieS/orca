@@ -1,4 +1,5 @@
 import { joinPath } from '@/lib/path'
+import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
@@ -120,7 +121,7 @@ class IndexedOpenFileLookup {
     let hasCombinedDiffConsumer = false
     for (const [index, file] of openFiles.entries()) {
       if (
-        (file.watchWorktreeId ?? file.worktreeId) !== scope.worktreeId ||
+        openFileWatchWorktreeId(file) !== scope.worktreeId ||
         openFileRuntimeOwner(file) !== scope.runtimeEnvironmentId
       ) {
         continue
