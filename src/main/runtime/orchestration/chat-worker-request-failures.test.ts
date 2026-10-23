@@ -276,7 +276,7 @@ it.each([100, 1000])('bounds the native root-end scan with %i saved items', asyn
       agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: 0 })
     )
     const store = {
-      getRecord: () => record,
+      getRecord: (_sessionId: string) => record,
       transitionHandoff: async (
         _sessionId: string,
         transition: (current: AgentSessionRecord) => AgentSessionRecord
