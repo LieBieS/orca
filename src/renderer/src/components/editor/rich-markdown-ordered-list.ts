@@ -7,7 +7,7 @@ const baseTokenizer = OrderedList.config.markdownTokenizer as MarkdownTokenizer
 
 export const RichMarkdownOrderedList = OrderedList.extend({
   addAttributes() {
-    // Why: Markdown reads only numeric markers, so a lettered list pasted as HTML must save as "1."
+    // Why: Markdown reads only numeric markers, so a lettered HTML paste shows and saves as "1."
     const { type: _letteredType, ...attributes } = this.parent?.() ?? {}
     return attributes
   },

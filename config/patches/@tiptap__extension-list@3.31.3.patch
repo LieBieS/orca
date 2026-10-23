@@ -1,98 +1,102 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 283575c0a81fa24ea2d73cb8096de05bce7ab26b..dd3e8241b1967ad7f846c1e5f89ff4359bc552ad 100644
+index 283575c0a81fa24ea2d73cb8096de05bce7ab26b..c7b19bda70eececb4688250f8bd11cbe6db6a9aa 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -248,7 +248,8 @@ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
- * Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
- * Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
+@@ -245,10 +245,9 @@ const ROMAN_NUMERALS = [
+ ];
+ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
+ /**
+-* Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
+-* Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
++* Orca patch: ordered-list markers are digits only, as in CommonMark, so "Dr." and "A." stay prose.
  */
 -const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+|[ivxlcdmIVXLCDM]+|${"[a-zA-Z]{1,2}"}`;
-+// Orca: CommonMark ordered-list markers are digits only, so "Dr." and "A." stay prose.
 +const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+`;
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
 diff --git a/dist/index.js b/dist/index.js
-index 1fa29e72a755ce527b1840765bbe44e80df38c3d..86772d90b1021793fb86752a4092ea738fafab0f 100644
+index 1fa29e72a755ce527b1840765bbe44e80df38c3d..9a857225b17a51fa6afd14674502e556566bef8c 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -236,7 +236,8 @@ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
- * Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
- * Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
+@@ -233,10 +233,9 @@ const ROMAN_NUMERALS = [
+ ];
+ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
+ /**
+-* Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
+-* Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
++* Orca patch: ordered-list markers are digits only, as in CommonMark, so "Dr." and "A." stay prose.
  */
 -const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+|[ivxlcdmIVXLCDM]+|${"[a-zA-Z]{1,2}"}`;
-+// Orca: CommonMark ordered-list markers are digits only, so "Dr." and "A." stay prose.
 +const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+`;
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
 diff --git a/dist/kit/index.cjs b/dist/kit/index.cjs
-index a1f217bd0eb67c84404a4e4b447379eaf3a7f367..d129b976c1204781c608c69358b730db5efa9e45 100644
+index a1f217bd0eb67c84404a4e4b447379eaf3a7f367..1f26c89d35a87bcd98113ad425245a9d86cb7ef0 100644
 --- a/dist/kit/index.cjs
 +++ b/dist/kit/index.cjs
-@@ -236,7 +236,8 @@ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
- * Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
- * Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
+@@ -233,10 +233,9 @@ const ROMAN_NUMERALS = [
+ ];
+ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
+ /**
+-* Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
+-* Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
++* Orca patch: ordered-list markers are digits only, as in CommonMark, so "Dr." and "A." stay prose.
  */
 -const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+|[ivxlcdmIVXLCDM]+|${"[a-zA-Z]{1,2}"}`;
-+// Orca: CommonMark ordered-list markers are digits only, so "Dr." and "A." stay prose.
 +const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+`;
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
 diff --git a/dist/kit/index.js b/dist/kit/index.js
-index ee2b2a9114cb40daa6061340ccd80d128c2981ba..084671353d3b3f796b23a9d55e994de826fd0f7b 100644
+index ee2b2a9114cb40daa6061340ccd80d128c2981ba..8152d964a20dfac20fc3234f93182325593d027d 100644
 --- a/dist/kit/index.js
 +++ b/dist/kit/index.js
-@@ -235,7 +235,8 @@ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
- * Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
- * Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
+@@ -232,10 +232,9 @@ const ROMAN_NUMERALS = [
+ ];
+ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
+ /**
+-* Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
+-* Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
++* Orca patch: ordered-list markers are digits only, as in CommonMark, so "Dr." and "A." stay prose.
  */
 -const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+|[ivxlcdmIVXLCDM]+|${"[a-zA-Z]{1,2}"}`;
-+// Orca: CommonMark ordered-list markers are digits only, so "Dr." and "A." stay prose.
 +const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+`;
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
 diff --git a/dist/ordered-list/index.cjs b/dist/ordered-list/index.cjs
-index 9373d830293b67e463c9764cec5bacd8c189b473..b13dee227e636cdfef37ef1f1abf3a85d3a792cf 100644
+index 9373d830293b67e463c9764cec5bacd8c189b473..4292a2b0f1b45fdc0f06d6fe7f351f7484e45974 100644
 --- a/dist/ordered-list/index.cjs
 +++ b/dist/ordered-list/index.cjs
-@@ -22,7 +22,8 @@ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
- * Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
- * Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
+@@ -19,10 +19,9 @@ const ROMAN_NUMERALS = [
+ ];
+ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
+ /**
+-* Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
+-* Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
++* Orca patch: ordered-list markers are digits only, as in CommonMark, so "Dr." and "A." stay prose.
  */
 -const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+|[ivxlcdmIVXLCDM]+|${"[a-zA-Z]{1,2}"}`;
-+// Orca: CommonMark ordered-list markers are digits only, so "Dr." and "A." stay prose.
 +const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+`;
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
 diff --git a/dist/ordered-list/index.js b/dist/ordered-list/index.js
-index ace73267067e8c785e080cbf5bc6655a0527aa36..4096236d03b568265c4af476258f702d72ee56db 100644
+index ace73267067e8c785e080cbf5bc6655a0527aa36..de1bb3061ec1629b20616f10a42eeba0a4e2222d 100644
 --- a/dist/ordered-list/index.js
 +++ b/dist/ordered-list/index.js
-@@ -21,7 +21,8 @@ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
- * Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
- * Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
+@@ -18,10 +18,9 @@ const ROMAN_NUMERALS = [
+ ];
+ const ALPHA_NUMERALS = "abcdefghijklmnopqrstuvwxyz";
+ /**
+-* Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
+-* Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
++* Orca patch: ordered-list markers are digits only, as in CommonMark, so "Dr." and "A." stay prose.
  */
 -const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+|[ivxlcdmIVXLCDM]+|${"[a-zA-Z]{1,2}"}`;
-+// Orca: CommonMark ordered-list markers are digits only, so "Dr." and "A." stay prose.
 +const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+`;
  /**
  * Convert a number to lowercase roman numerals.
  * @example toRoman(1) // 'i'
-diff --git a/src/ordered-list/roman.ts b/src/ordered-list/roman.ts
-index 5c01414b3123b1c36669a8a7447d6d8ca017627b..77fd39efa15d9d27ea1e489f941cf1b234f1ae79 100644
---- a/src/ordered-list/roman.ts
-+++ b/src/ordered-list/roman.ts
-@@ -23,7 +23,8 @@ export const ORDERED_LIST_ALPHA_MARKER_PATTERN = '[a-zA-Z]{1,2}'
-  * Marker segment for ordered list lines: numeric, roman, or 1–2 letter alpha.
-  * Roman is matched before alpha so "iii" is roman; invalid romans like "aa" fall through to alpha.
-  */
--export const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+|[ivxlcdmIVXLCDM]+|${ORDERED_LIST_ALPHA_MARKER_PATTERN}`
-+// Orca: CommonMark ordered-list markers are digits only, so "Dr." and "A." stay prose.
-+export const ORDERED_LIST_MARKER_PATTERN = String.raw`\d+`
- 
- /**
-  * Convert a number to lowercase roman numerals.

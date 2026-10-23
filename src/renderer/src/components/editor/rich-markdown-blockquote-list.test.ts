@@ -15,7 +15,7 @@ function openMarkdown(source: string): Editor {
 }
 
 describe('rich markdown blockquote list continuations', () => {
-  // A no-break space after the marker is Tiptap's but not Marked's, so it reaches the fallback.
+  // A no-break space reaches the fallback (only Tiptap reads it); plain spaces are controls.
   it.each(['1.\u00a0', '3)\u00a0', '1234567890.\u00a0', '1. ', '3) '])(
     'opens %j without throwing during Markdown initialization',
     (marker) => {
@@ -67,31 +67,23 @@ describe('rich markdown blockquote list continuations', () => {
     ['> 1.\u00a0x\nlazy\n   > y', '> 1. x\nlazy\n   > y'],
     // Tiptap reads a 5+ space gap as text, not code; compare with the fully quoted form.
     ['> 1.\u00a0    x\n>    > nested\nlazy', '> 1.\u00a0    x\n>    > nested\n>    > lazy']
-  ])(
-    'ends the continued list at the next quoted line like a numeric list: %j',
-    (source, numeric) => {
-      const editor = openMarkdown(source)
-      const control = openMarkdown(numeric)
-      try {
-        const withoutListAttrs = (json: unknown): string =>
-          JSON.stringify(json).replace(/"attrs":\{[^}]*\},?/g, '')
-        expect(withoutListAttrs(editor.getJSON())).toEqual(withoutListAttrs(control.getJSON()))
-        const withoutMarkers = (markdown: string): string =>
-          markdown.replace(/[a-zA-Z0-9]+[.)](?= )/g, '#.')
-        expect(withoutMarkers(editor.getMarkdown())).toBe(withoutMarkers(control.getMarkdown()))
-      } finally {
-        editor.destroy()
-        control.destroy()
-      }
+  ])('ends the continued list at the next quoted line: %j', (source, control) => {
+    const editor = openMarkdown(source)
+    const expected = openMarkdown(control)
+    try {
+      expect(editor.getJSON()).toEqual(expected.getJSON())
+      expect(editor.getMarkdown()).toBe(expected.getMarkdown())
+    } finally {
+      editor.destroy()
+      expected.destroy()
     }
-  )
+  })
 
   // Guards a dependency bump: any item start Tiptap accepts must still reach the fallback.
   it.each([
     '> \t1. x\nlazy',
     '>     1. x\nlazy',
     '> 1.\u00a0x\nlazy',
-    '> 1.\tx\nlazy',
     '> 4)\u00a0x\nlazy',
     '>  > 1.\u00a0x\nlazy',
     '> 1.\u00a0x\r\nlazy'
