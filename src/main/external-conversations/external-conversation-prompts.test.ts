@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import type { AgentPhase, AgentTransition } from '../../shared/agent-transitions'
@@ -151,6 +151,43 @@ describe('ExternalConversationSeam watch', () => {
     expect(paneListeners.size).toBe(0)
   })
 
+  it('does not deliver a previous watcher’s queued finish to a new watcher', async () => {
+    const { seam, host, hookRows, paneChange } = await linked()
+    vi.useFakeTimers()
+    try {
+      const release = seam.watch(host, () => {})
+      hookRows.set(PANE, hookRow({ state: 'working' }))
+      paneChange({
+        kind: 'observed',
+        paneKey: PANE,
+        phase: 'working',
+        workspace: { worktreeId: WORKTREE, sshHostId: null },
+        at: 100
+      })
+      hookRows.set(PANE, hookRow({ state: 'done', stateStartedAt: 300 }))
+      paneChange(moved('working', 'done', 'turn-finished'))
+      release()
+      const seen: (ConversationSnapshot | ConversationEvent)[] = []
+      const releaseNew = seam.watch(host, (event) => seen.push(event))
+      await vi.runAllTimersAsync()
+      expect(seen.map((event) => event.kind)).toEqual(['snapshot'])
+      releaseNew()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports no outcome when a completed hook turn records no verdict', async () => {
+    const { seam, host, hookRows, paneChange } = await linked()
+    const seen: (ConversationSnapshot | ConversationEvent)[] = []
+    seam.watch(host, (event) => seen.push(event))
+    hookRows.set(PANE, hookRow({ state: 'working' }))
+    paneChange(moved('rest', 'working', 'prompt-submitted'))
+    hookRows.set(PANE, hookRow({ state: 'done', stateStartedAt: 300 }))
+    paneChange(moved('working', 'done', 'turn-finished'))
+    expect(seen.at(-1)).toMatchObject({ kind: 'turn-ended', stopReason: null })
+  })
+
   it('tells a linked turn’s start, its prompt, and its end with the host’s verdict', async () => {
     const { seam, host, hookRows, paneChange } = await linked()
     const seen: ConversationEvent[] = []
@@ -169,7 +206,7 @@ describe('ExternalConversationSeam watch', () => {
         state: 'done',
         stateStartedAt: 300,
         lastAssistantMessage: 'Done.',
-        mainAgent: { state: 'done', outcome: 'success' }
+        mainAgent: { state: 'done', stateStartedAt: 300, outcome: 'success' }
       })
     )
     paneChange(moved('needs-you', 'done', 'turn-finished'))

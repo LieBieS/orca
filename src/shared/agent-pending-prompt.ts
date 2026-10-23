@@ -33,8 +33,6 @@ export type PendingPrompt =
   /** The agent is waiting on something only Orca's own views can answer. */
   | { kind: 'unsupported'; promptId: string }
 
-export const APPROVAL_OPTION_IDS = ['allow_once', 'reject_once'] as const
-
 type PromptRow = Pick<
   AgentStatusIpcPayload,
   'state' | 'interrupted' | 'mainAgent' | 'interactivePrompt' | 'toolName'

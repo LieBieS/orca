@@ -145,6 +145,21 @@ describe('TerminalAgentPromptAnswers', () => {
     await expect(h.answer(promptId)).resolves.toMatchObject({ reason: 'prompt_not_pending' })
   })
 
+  it('honors an older writer’s refusal without a settlement', async () => {
+    const h = harness()
+    const { promptId } = h.answers.pending(h.runtime, target)!
+    h.runtime.sendTerminal.mockResolvedValueOnce({
+      handle: 'term-1',
+      accepted: false,
+      bytesWritten: 0
+    })
+    await expect(h.answer(promptId)).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'agent_not_reachable'
+    })
+    expect(h.answers.pending(h.runtime, target)?.promptId).toBe(promptId)
+  })
+
   it('refuses before any key when the caller’s own check fails', async () => {
     const h = harness()
     const { promptId } = h.answers.pending(h.runtime, target)!

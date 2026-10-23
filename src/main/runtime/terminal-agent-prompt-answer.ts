@@ -1,9 +1,7 @@
-// The host's own answer to a hook-reported terminal agent's prompt: the keys the phone's and the
-// window's cards send (the shared approval envelope and question key builders), written through
-// the runtime's raw writer as `terminal.send` writes the phone's, but fenced on the exact prompt
-// and process it was asked about, so a late answer cannot land in whatever the pane shows next.
+// Answers are fenced to the prompt and process so late keys cannot reach a replacement shell.
 import { createHash } from 'node:crypto'
 import { readAgentPromptAnswers, type PendingPrompt } from '../../shared/agent-pending-prompt'
+import { readTerminalSendAcknowledgment } from '../../shared/terminal-send-acknowledgment'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { AgentPromptExpectedBinding } from './runtime-terminal-contracts'
@@ -122,11 +120,11 @@ export class TerminalAgentPromptAnswers {
           }
         }
       )
-      const settlement = sent.writeSettlement
-      if (!settlement || settlement.outcome === 'accepted') {
+      const settlement = readTerminalSendAcknowledgment({ send: sent })
+      if (settlement === 'accepted') {
         return { outcome: 'accepted' }
       }
-      if (settlement.outcome === 'refused') {
+      if (settlement === 'refused') {
         this.answered.delete(answer.promptId)
         return { outcome: 'refused', reason: 'agent_not_reachable' }
       }

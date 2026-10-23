@@ -4,6 +4,7 @@
  * refused here whoever makes it.
  */
 
+import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
 import {
   ConnectorAnswer,
   ConnectorPendingPrompt,
@@ -103,18 +104,9 @@ export const CONNECTOR_METHODS = [
       })
       // A closed connection or a disable ends the window early.
       const ended = AbortSignal.any([seam.signal, ...(context.signal ? [context.signal] : [])])
-      let stop = (): void => {}
       try {
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, forMs)
-          stop = () => {
-            clearTimeout(timer)
-            resolve()
-          }
-          ended.addEventListener('abort', stop, { once: true })
-        })
+        await delayUnlessAborted(forMs, ended)
       } finally {
-        ended.removeEventListener('abort', stop)
         release()
       }
       return { snapshot, events }

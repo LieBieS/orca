@@ -77,7 +77,11 @@ export class ConversationEvents {
         started: (item) => this.started(item),
         stopped: (item) => this.ended(item, agentMainAgentVerdict(item.row))
       })
-      this.release = this.deps.onAgentPaneChange((change) => news.observe(change))
+      const unsubscribe = this.deps.onAgentPaneChange((change) => news.observe(change))
+      this.release = () => {
+        unsubscribe()
+        news.dispose()
+      }
     }
     this.listeners.add(listener)
     // After subscribing, so a change while the snapshot is read is not missed.

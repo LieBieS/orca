@@ -87,6 +87,14 @@ export class TerminalAgentTurnNews<Prepared> {
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
   }
 
+  dispose(): void {
+    for (const paneKey of this.pendingByPane.keys()) {
+      this.cancelPending(paneKey)
+    }
+    this.finishedTurnByPane.clear()
+    this.workingSeen.clear()
+  }
+
   private tellOptIn(change: Extract<AgentPaneChange, { kind: 'moved' }>): void {
     const { paneKey, workspace } = change
     if (change.transition === 'prompt-submitted' && this.deps.started) {
