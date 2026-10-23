@@ -166,7 +166,7 @@ describe('handleOscLink', () => {
     })
   })
 
-  it('keeps a direct SSH link to a sibling workspace off the read-only client view', async () => {
+  it('opens a direct SSH link to a sibling workspace in that workspace, as before', async () => {
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
     findWorkspaceFileRouteMock.mockReturnValue({
       worktreeId: 'wt-2',
@@ -177,11 +177,16 @@ describe('handleOscLink', () => {
     openDetectedFilePath('/other/x.ts', null, null, deps)
     await flushAsyncWork()
 
+    // Why: a read-only absolute tab on a direct SSH connection would read as this computer's file.
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-2', {
+      providesInitialSurface: true,
+      executionHostId: 'ssh:ssh-1'
+    })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/other/x.ts',
-        worktreeId: 'wt-1',
-        externalSshTargetId: 'ssh-1'
+        relativePath: 'x.ts',
+        worktreeId: 'wt-2'
       }),
       { forceContentReload: true }
     )

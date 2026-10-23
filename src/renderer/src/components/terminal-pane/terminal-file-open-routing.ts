@@ -34,8 +34,8 @@ import {
 } from './terminal-file-other-workspace-hint'
 import {
   hostNamedOtherWorkspaceOwner,
-  otherWorkspaceFileOwner,
-  otherWorkspaceViewFields
+  otherWorkspaceViewFields,
+  siblingWorkspaceLink
 } from './terminal-file-other-workspace-owner'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 
@@ -299,11 +299,11 @@ export function openDetectedFilePath(
         relativePath = maybeRelative
       }
     } else if (!otherWorkspaceOwner && hostGrantId === null && !clientLocal && !hostWorkspaceFile) {
-      otherWorkspaceOwner = otherWorkspaceFileOwner(
-        targetExecutionHostId,
-        mappedFilePath,
-        worktreeId
-      )
+      const sibling = siblingWorkspaceLink(targetExecutionHostId, mappedFilePath, worktreeId)
+      otherWorkspaceOwner = sibling.view
+      if (sibling.openInOwner) {
+        ;({ worktreeId, relativePath } = sibling.openInOwner)
+      }
     }
 
     if (

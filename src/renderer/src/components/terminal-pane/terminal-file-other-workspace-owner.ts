@@ -16,16 +16,28 @@ export function otherWorkspaceFileOwner(
   absolutePath: string,
   sourceWorktreeId: string
 ): RuntimeWorkspaceFileRoute | null {
-  if (
-    // Why: floating-workspace files stay in their panel even when a project also contains the path.
-    isFloatingWorkspaceId(sourceWorktreeId) ||
-    // Why: a read-only absolute tab on a direct SSH connection reads as this computer's file.
-    parseExecutionHostId(executionHostId)?.kind === 'ssh'
-  ) {
+  // Why: floating-workspace files stay in their panel even when a project also contains the path.
+  if (isFloatingWorkspaceId(sourceWorktreeId)) {
     return null
   }
   const owner = findWorkspaceFileRoute(useAppStore.getState(), executionHostId, absolutePath)
   return owner && owner.worktreeId !== sourceWorktreeId ? owner : null
+}
+
+/**
+ * A link to a file another workspace on this computer or server holds is viewed here. A direct
+ * SSH connection has no such view (a read-only absolute tab there reads as this computer's file),
+ * so its file still opens in the owning workspace, which also reuses a tab already open there.
+ */
+export function siblingWorkspaceLink(
+  executionHostId: ExecutionHostId,
+  absolutePath: string,
+  sourceWorktreeId: string
+): { view: RuntimeWorkspaceFileRoute | null; openInOwner: RuntimeWorkspaceFileRoute | null } {
+  const owner = otherWorkspaceFileOwner(executionHostId, absolutePath, sourceWorktreeId)
+  return parseExecutionHostId(executionHostId)?.kind === 'ssh'
+    ? { view: null, openInOwner: owner }
+    : { view: owner, openInOwner: null }
 }
 
 /**
