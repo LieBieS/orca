@@ -6,6 +6,7 @@ import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-rou
 import { useAppStore } from '@/store'
 import { selectKnownWorktreeById } from '@/store/selectors'
 import { openLinkedFileInEditor } from './terminal-file-link-editor-open'
+import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
 
 const OTHER_WORKSPACE_HINT_TOAST_ID = 'terminal-file-other-workspace'
 let hintShown = false
@@ -22,6 +23,8 @@ export type FileInOtherWorkspace = {
 /** Opens the file as its owning workspace's own file, with that workspace in front. */
 export function openFileInOwningWorkspace(file: FileInOtherWorkspace): void {
   const { owner } = file
+  // Why: a later link click supersedes this open's line reveal, as it would any link open.
+  const isCurrentOpen = reserveDetectedFilePathOpenTurn()
   activateAndRevealWorkspace(owner.worktreeId, {
     providesInitialSurface: true,
     executionHostId: owner.executionHostId
@@ -35,7 +38,7 @@ export function openFileInOwningWorkspace(file: FileInOtherWorkspace): void {
     },
     null,
     file.position,
-    () => true
+    isCurrentOpen
   )
 }
 

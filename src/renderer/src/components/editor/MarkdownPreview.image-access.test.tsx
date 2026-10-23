@@ -25,7 +25,7 @@ const storeState = {
   repos: [],
   folderWorkspaces: [],
   projectGroups: [],
-  openFiles: [],
+  openFiles: [] as Record<string, unknown>[],
   activeFileIdByWorktree: {},
   settings: { openLinksInApp: true },
   editorFontZoomLevel: 0
@@ -39,6 +39,13 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 vi.mock('@/store/slices/worktree-helpers', () => ({ findWorktreeById: () => null }))
+// Why: the catalog says workspace wt-b (root /b) holds /b/readme.md.
+vi.mock('@/lib/runtime-workspace-file-route', () => ({
+  findWorkspaceFileRoute: (_state: unknown, _hostId: string, absolutePath: string) =>
+    absolutePath === '/b/readme.md'
+      ? { worktreeId: 'wt-b', relativePath: 'readme.md', executionHostId: 'runtime:env-1' }
+      : null
+}))
 vi.mock('@/lib/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,
@@ -124,5 +131,37 @@ describe('MarkdownPreview images', () => {
       kind: 'document-resource',
       documentPath: '/notes/readme.md'
     })
+  })
+
+  it("reads a read-only view's images through the workspace that holds the file", () => {
+    storeState.openFiles = [
+      {
+        id: 'view',
+        worktreeId: 'wt-a',
+        filePath: '/b/readme.md',
+        relativePath: '/b/readme.md',
+        runtimeEnvironmentId: 'env-1',
+        readOnly: true,
+        mode: 'edit'
+      }
+    ]
+    act(() => {
+      root.render(
+        <MarkdownPreview
+          content="![Logo](./logo.png)"
+          filePath="/b/readme.md"
+          sourceFileId="view"
+          sourceWorktreeId="wt-a"
+          sourceRuntimeEnvironmentId="env-1"
+          scrollCacheKey="view-key"
+        />
+      )
+    })
+
+    expect(useLocalImageSrcSpy.mock.calls[0]?.[3]).toMatchObject({
+      worktreeId: 'wt-b',
+      worktreePath: '/b'
+    })
+    storeState.openFiles = []
   })
 })

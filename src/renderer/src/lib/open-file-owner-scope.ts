@@ -4,7 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shar
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { findWorkspaceFileRoute } from './runtime-workspace-file-route'
 
-type WatchScopedFile = Pick<
+type OwnerScopedFile = Pick<
   OpenFile,
   | 'worktreeId'
   | 'filePath'
@@ -16,12 +16,12 @@ type WatchScopedFile = Pick<
 >
 
 /**
- * Where an open file is watched. A read-only view of a file another workspace on its host holds
- * (#32158) lives in one workspace but is watched with the one that holds the file, derived from
- * the catalog so a restored or reused view needs nothing stored.
+ * The workspace an open file's reads, watch and document resources go through. A read-only view
+ * of a file another workspace on its host holds (#32158) lives in one workspace but is scoped to
+ * the one that holds the file, derived from the catalog so a restored view needs nothing stored.
  */
-export function openFileWatchScope(
-  file: WatchScopedFile,
+export function openFileOwnerScope(
+  file: OwnerScopedFile,
   state: AppState
 ): { worktreeId: string; relativePath: string } {
   const own = { worktreeId: file.worktreeId, relativePath: file.relativePath }
@@ -45,10 +45,10 @@ export function openFileWatchScope(
   return route ? { worktreeId: route.worktreeId, relativePath: route.relativePath } : own
 }
 
-/** The workspace whose watch covers an open file; without a catalog, the one it lives in. */
-export function openFileWatchWorktreeId(
-  file: WatchScopedFile,
+/** The workspace an open file is scoped to; without a catalog, the one it lives in. */
+export function openFileOwnerWorktreeId(
+  file: OwnerScopedFile,
   state: AppState | undefined
 ): string {
-  return state ? openFileWatchScope(file, state).worktreeId : file.worktreeId
+  return state ? openFileOwnerScope(file, state).worktreeId : file.worktreeId
 }

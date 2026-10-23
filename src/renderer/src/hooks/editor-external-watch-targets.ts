@@ -1,5 +1,5 @@
 import { useAppStore, type AppState } from '@/store'
-import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
+import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -191,7 +191,7 @@ export function selectEditorExternalWatchTargets(
     addWatchConsumer(
       consumers,
       // Why the store: this selector's narrowed state lacks the catalog the owner lookup reads.
-      openFileWatchWorktreeId(file, useAppStore.getState()),
+      openFileOwnerWorktreeId(file, useAppStore.getState()),
       getOpenFileWatchConsumer(file)
     )
   }

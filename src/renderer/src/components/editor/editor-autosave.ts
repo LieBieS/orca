@@ -1,5 +1,5 @@
 import { joinPath } from '@/lib/path'
-import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
+import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import type { AppState } from '@/store/types'
 import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
@@ -154,7 +154,7 @@ export function getOpenFilesForExternalFileChange(
   const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
   return openFiles.filter((file) => {
-    if (openFileWatchWorktreeId(file, catalog) !== target.worktreeId) {
+    if (openFileOwnerWorktreeId(file, catalog) !== target.worktreeId) {
       return false
     }
     if (

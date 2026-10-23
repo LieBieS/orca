@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { Button } from '@/components/ui/button'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
@@ -47,6 +48,8 @@ export function EditorMarkdownFileSurface({
   monacoEditor: React.JSX.Element
 }): React.JSX.Element {
   const setSizeOverride = useAppStore((s) => s.setMarkdownRichModeSizeOverride)
+  // Why: a read-only view of another workspace's file resolves the images beside it through that workspace.
+  const ownerWorktreeId = useAppStore((s) => openFileOwnerWorktreeId(activeFile, s))
 
   if (activeFile.conflict?.conflictStatus === 'unresolved') {
     return <div className="h-full min-h-0">{monacoEditor}</div>
@@ -108,7 +111,7 @@ export function EditorMarkdownFileSurface({
               viewStateId={viewStateScopeId}
               content={editorContent}
               filePath={activeFile.filePath}
-              worktreeId={activeFile.worktreeId}
+              worktreeId={ownerWorktreeId}
               externalSshTargetId={activeFile.externalSshTargetId}
               runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
               scrollCacheKey={`${editorViewStateKey}:rich`}

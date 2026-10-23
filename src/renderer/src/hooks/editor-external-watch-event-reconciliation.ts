@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { openFileWatchWorktreeId } from '@/lib/open-file-watch-scope'
+import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import type { AppState } from '@/store/types'
 import { basename } from '@/lib/path'
@@ -169,7 +169,7 @@ export function buildEditorExternalWatchEventHandler(
       const state = useAppStore.getState()
       for (const file of state.openFiles) {
         if (
-          openFileWatchWorktreeId(file, state) === target.worktreeId &&
+          openFileOwnerWorktreeId(file, state) === target.worktreeId &&
           getOpenFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           (file.externalMutation === 'deleted' || file.externalMutation === 'renamed') &&
@@ -275,7 +275,7 @@ function hasRenameCorrelatedCreate(
   const deletedBasenames = new Set<string>()
   for (const file of state.openFiles) {
     if (
-      openFileWatchWorktreeId(file, state) !== worktreeId ||
+      openFileOwnerWorktreeId(file, state) !== worktreeId ||
       (file.mode !== 'edit' && file.mode !== 'markdown-preview') ||
       !deletedIdSet.has(file.id)
     ) {
