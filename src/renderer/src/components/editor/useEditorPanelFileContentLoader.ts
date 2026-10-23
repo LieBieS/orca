@@ -165,7 +165,11 @@ export function useEditorPanelFileContentLoader({
               ? null
               : findWorkspaceFileRoute(currentState, executionHostId, filePath)
             if (route && route.worktreeId !== worktreeId) {
-              if (!restoredOpenFile.readOnly || !runtimeEnvironmentId) {
+              if (
+                !restoredOpenFile.readOnly ||
+                !runtimeEnvironmentId ||
+                restoredOpenFile.terminalArtifactGrantId
+              ) {
                 await reownRestoredFile(route, runtimeEnvironmentId ?? null)
                 return
               }

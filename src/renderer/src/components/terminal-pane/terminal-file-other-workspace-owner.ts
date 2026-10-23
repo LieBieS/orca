@@ -3,7 +3,7 @@ import {
   type RuntimeWorkspaceFileRoute
 } from '@/lib/runtime-workspace-file-route'
 import { useAppStore } from '@/store'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import type { HostWorkspaceFile } from './terminal-host-workspace-file'
 
@@ -16,8 +16,12 @@ export function otherWorkspaceFileOwner(
   absolutePath: string,
   sourceWorktreeId: string
 ): RuntimeWorkspaceFileRoute | null {
-  // Why: floating-workspace files stay in their panel even when a project also contains the path.
-  if (isFloatingWorkspaceId(sourceWorktreeId)) {
+  if (
+    // Why: floating-workspace files stay in their panel even when a project also contains the path.
+    isFloatingWorkspaceId(sourceWorktreeId) ||
+    // Why: a read-only absolute tab on a direct SSH connection reads as this computer's file.
+    parseExecutionHostId(executionHostId)?.kind === 'ssh'
+  ) {
     return null
   }
   const owner = findWorkspaceFileRoute(useAppStore.getState(), executionHostId, absolutePath)

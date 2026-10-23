@@ -3534,6 +3534,7 @@
             "openInThisGroup": "このグループで開く",
             "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした",
             "fileInOtherWorkspace": "このファイルは {{value0}} にあります",
+            "fileInAnotherWorkspace": "このファイルは別のワークスペースにあります",
             "openInOwningWorkspace": "そこで開く",
             "openedHereReadOnly": "ここでは読み取り専用で開いています"
           },

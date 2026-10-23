@@ -129,11 +129,11 @@ describe('a paired-server link outside its own workspace', () => {
       { forceContentReload: true }
     )
     expect(showHintMock).toHaveBeenCalledWith({
+      fileId: '/repo/src/index.ts',
       filePath: '/repo/src/index.ts',
       owner,
       runtimeEnvironmentId: 'env-1',
-      line: 3,
-      column: null
+      position: { line: 3, column: null }
     })
   })
 

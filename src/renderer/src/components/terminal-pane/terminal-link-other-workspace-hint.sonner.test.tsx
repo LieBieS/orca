@@ -47,6 +47,13 @@ async function settle(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  storeState.openFiles = []
+  // Records each open as the store does, so the hint sees whether the tab is read-only.
+  openFileMock.mockImplementation(
+    (file: { filePath: string; worktreeId: string; readOnly?: boolean }) => {
+      storeState.openFiles.push({ id: file.filePath, ...file })
+    }
+  )
   findWorkspaceFileRouteMock.mockReturnValue(null)
   statMock.mockResolvedValue({ isDirectory: false })
   Object.defineProperty(window, 'api', {
@@ -119,5 +126,26 @@ describe('a terminal file link clicked in workspace A', () => {
       { forceContentReload: true }
     )
     expect(openFileMock.mock.lastCall?.[0]).not.toHaveProperty('readOnly')
+  })
+
+  it('shows no read-only hint when the link reused an editable tab here', async () => {
+    findWorkspaceFileRouteMock.mockReturnValue({
+      worktreeId: 'wt-b',
+      relativePath: 'report.md',
+      executionHostId: 'local'
+    })
+    openFileMock.mockImplementationOnce(() => {
+      storeState.openFiles.push({
+        id: '/b/report.md',
+        filePath: '/b/report.md',
+        worktreeId: 'wt-a'
+      })
+    })
+
+    openDetectedFilePath('/b/report.md', null, null, sourceDeps)
+    await settle()
+
+    expect(openFileMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/This file is in/)).toBeNull()
   })
 })

@@ -15508,6 +15508,7 @@
             "openInThisGroup": "Abrir neste grupo",
             "openInThisGroupRefused": "Não foi possível abrir {{value0}} neste grupo",
             "fileInOtherWorkspace": "Este arquivo está em {{value0}}",
+            "fileInAnotherWorkspace": "Este arquivo está em outro espaço de trabalho",
             "openInOwningWorkspace": "Abrir lá",
             "openedHereReadOnly": "Aberto aqui como somente leitura"
           },

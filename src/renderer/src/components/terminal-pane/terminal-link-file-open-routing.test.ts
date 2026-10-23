@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getConnectionId } from '@/lib/connection-context'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -53,6 +54,10 @@ vi.mock('./terminal-file-other-workspace-hint', () => ({
 }))
 
 installTerminalLinkTestEnvironment(doubles)
+
+beforeEach(() => {
+  findWorkspaceFileRouteMock.mockReset()
+})
 
 describe('handleOscLink', () => {
   it('opens local .html file paths in Orca browser tabs with the platform modifier', async () => {
@@ -153,12 +158,35 @@ describe('handleOscLink', () => {
       { forceContentReload: true }
     )
     expect(showHintMock).toHaveBeenCalledWith({
+      fileId: filePath,
       filePath,
       owner,
       runtimeEnvironmentId: null,
-      line: 12,
-      column: null
+      position: { line: 12, column: null }
     })
+  })
+
+  it('keeps a direct SSH link to a sibling workspace off the read-only client view', async () => {
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    findWorkspaceFileRouteMock.mockReturnValue({
+      worktreeId: 'wt-2',
+      relativePath: 'x.ts',
+      executionHostId: 'ssh:ssh-1'
+    })
+
+    openDetectedFilePath('/other/x.ts', null, null, deps)
+    await flushAsyncWork()
+
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/other/x.ts',
+        worktreeId: 'wt-1',
+        externalSshTargetId: 'ssh-1'
+      }),
+      { forceContentReload: true }
+    )
+    expect(openFileMock.mock.calls[0][0]).not.toHaveProperty('readOnly')
+    expect(showHintMock).not.toHaveBeenCalled()
   })
 
   it('opens a file outside every workspace here, editable and without a hint', async () => {

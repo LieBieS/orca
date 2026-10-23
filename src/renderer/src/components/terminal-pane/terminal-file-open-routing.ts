@@ -354,11 +354,11 @@ export function openDetectedFilePath(
       refuseExplicitNonEditorRoute()
     } else if (otherWorkspaceOwner && requestId === latestOpenDetectedFilePathRequestId) {
       showFileInOtherWorkspaceHint({
+        fileId: opened.fileId,
         filePath: mappedFilePath,
         owner: otherWorkspaceOwner,
         runtimeEnvironmentId: runtimeOwnerId,
-        line,
-        column
+        position: { line, column }
       })
     }
   })()
