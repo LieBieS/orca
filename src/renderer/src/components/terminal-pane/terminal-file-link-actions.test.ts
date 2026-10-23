@@ -101,8 +101,7 @@ describe('terminal file link actions', () => {
     expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(1, '/repo/src/main.ts', 12, 4, deps)
     expect(mocks.openDetectedFilePath).toHaveBeenNthCalledWith(2, '/repo/src/main.ts', 12, 4, {
       ...deps,
-      openWithSystemDefault: true,
-      browserDestination: 'system'
+      openWithSystemDefault: true
     })
   })
 
@@ -169,8 +168,7 @@ describe('terminal file link actions', () => {
     // The open flow downloads a host file and opens a path the host disowns on this computer.
     expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/docs/report.html', null, null, {
       ...deps,
-      openWithSystemDefault: true,
-      browserDestination: 'system'
+      openWithSystemDefault: true
     })
   })
 

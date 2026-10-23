@@ -210,9 +210,11 @@ export function openDetectedFilePath(
     }
 
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
-    // Why: an explicit group request falls through so the HTML branch can refuse it.
+    // Why: a remote workspace's hint and rows promise Orca before the path resolves, and an
+    // explicit group request falls through so the HTML branch can refuse it.
     const pageDestination =
       canOpenWithSystemDefault &&
+      !clientLocal &&
       hostGrantId === null &&
       !explicitGroupRequest &&
       isHtmlFilePath(mappedFilePath)
