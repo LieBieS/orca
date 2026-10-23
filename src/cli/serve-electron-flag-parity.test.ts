@@ -12,12 +12,15 @@ import { SERVE_COMMAND_SPECS } from './specs/serve'
 // - pairing-code / environment: nothing in src/main reads them, so they ride through untouched.
 // - force: overrides the CLI's own pre-exec check; a direct `<binary> serve` launch has none to override.
 // - supervise: the CLI is the supervisor; a direct `<binary> serve` launch has no parent to restart it.
+// - reclaim-stale-lock / yes: the CLI runs that check itself and starts no runtime at all.
 const UNTRANSLATED_GLOBAL_FLAGS = new Set([
   'help',
   'pairing-code',
   'environment',
   'force',
-  'supervise'
+  'supervise',
+  'reclaim-stale-lock',
+  'yes'
 ])
 
 const serveSpec = SERVE_COMMAND_SPECS.find((spec) => spec.path.join(' ') === 'serve')
