@@ -470,8 +470,7 @@ it('delivers a captured live failure when the same journal clears context before
   await batch(r.journal, 'A', [turn('A', 'failure'), words('A', 'failure before clear')])
   await r.journal.context.clear(
     { operationId: 'clear-after-A', afterFence: 0, clearedAt: 1 },
-    { write: () => {}, committed: () => {} },
-    'clear-operation'
+    { write: () => {}, committed: () => {} }
   )
   await tick()
   expect(r.mail().map((message) => JSON.parse(message.payload ?? '{}'))).toMatchObject([

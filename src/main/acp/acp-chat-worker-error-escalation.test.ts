@@ -391,8 +391,7 @@ it.each(['dispatch', 'setting', 'history', 'clear'] as const)(
       } else {
         await r.journal.context.clear(
           { operationId: 'clear-during-wait', afterFence: r.fence(), clearedAt: 1 },
-          { write: () => {}, committed: () => {} },
-          'clear'
+          { write: () => {}, committed: () => {} }
         )
       }
       r.rig.child().agent.reply(frame, { stopReason: 'end_turn' })
