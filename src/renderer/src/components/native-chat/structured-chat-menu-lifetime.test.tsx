@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import React, { createRef } from 'react'
+import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type * as I18n from '@/i18n/i18n'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
@@ -167,7 +168,7 @@ it('keeps live sibling labels and the shared displayed-tab pinned-close guard', 
   act(() =>
     useAppStore.setState((state) => ({
       closeUnifiedTab: close,
-      settings: { ...state.settings, confirmClosePinnedTab: true },
+      settings: createGlobalSettingsFixture({ confirmClosePinnedTab: true }),
       groupsByWorktree: {
         ...state.groupsByWorktree,
         owner: [
