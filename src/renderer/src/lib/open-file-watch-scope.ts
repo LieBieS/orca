@@ -11,6 +11,7 @@ type WatchScopedFile = Pick<
   | 'filePath'
   | 'relativePath'
   | 'readOnly'
+  | 'liveTail'
   | 'runtimeEnvironmentId'
   | 'terminalArtifactGrantId'
 >
@@ -25,9 +26,11 @@ export function openFileWatchScope(
   state: AppState = useAppStore.getState()
 ): { worktreeId: string; relativePath: string } {
   const own = { worktreeId: file.worktreeId, relativePath: file.relativePath }
-  // Why: only a read-only absolute view may sit outside the workspace holding its file.
+  // Why: only a read-only absolute view may sit outside the workspace holding its file; a live-tail
+  // log follows itself and must not pull in a recursive watch of a folder that holds it.
   if (
     file.readOnly !== true ||
+    file.liveTail === true ||
     file.relativePath !== file.filePath ||
     file.terminalArtifactGrantId ||
     isFloatingWorkspaceId(file.worktreeId)
