@@ -10,7 +10,8 @@ import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,
-  type NativeChatContextMenuActions
+  type NativeChatContextMenuActions,
+  type NativeChatContextMenuTargetArgs
 } from './use-native-chat-context-menu'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
@@ -26,7 +27,8 @@ export function useStructuredNativeChatPaneCommands({
   questionAnswerInputRef,
   terminalPaneActions,
   sessionId,
-  target
+  target,
+  ...menuTargets
 }: {
   tabId: string
   groupId?: string
@@ -37,10 +39,13 @@ export function useStructuredNativeChatPaneCommands({
   terminalPaneActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
   sessionId: string
   target: RuntimeClientTarget
-}) {
+} & NativeChatContextMenuTargetArgs) {
   const keybindings = useAppStore((state) => state.keybindings)
   const worktreeId = useNativeChatTabOwnerWorktreeId(tabId)
   const chatPaneActions = useStructuredChatPaneActions(tabId, worktreeId ?? '', groupId ?? '')
+  const hasSplitPanes = useAppStore(
+    (state) => (state.groupsByWorktree[worktreeId ?? '']?.length ?? 0) > 1
+  )
   const resolveOrcaSessionId = useMemo(
     () =>
       isOrcaSessionId(sessionId)
@@ -54,6 +59,7 @@ export function useStructuredNativeChatPaneCommands({
     questionAnswerInputRef
   })
   const contextMenu = useNativeChatContextMenu({
+    ...menuTargets,
     rootRef,
     actions: {
       ...emptyNativeChatContextMenuActions,
@@ -68,7 +74,10 @@ export function useStructuredNativeChatPaneCommands({
       right: formatShortcutLabel('terminal.splitRight', keybindings),
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
-    chatPaneActions: groupId && terminalPaneActions === undefined ? chatPaneActions : undefined
+    chatPaneActions:
+      worktreeId && groupId && terminalPaneActions === undefined
+        ? { ...chatPaneActions, canClosePane: hasSplitPanes && chatPaneActions.canClosePane }
+        : undefined
   })
   const onKeyDownCapture = useCallback<KeyboardEventHandler<HTMLDivElement>>(
     (event) => {

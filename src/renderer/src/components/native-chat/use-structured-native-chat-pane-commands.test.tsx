@@ -4,6 +4,7 @@
 import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as I18n from '@/i18n/i18n'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 
@@ -11,6 +12,17 @@ type ItemProps = { onSelect?: () => void; children?: ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 const callRuntimeRpc = vi.hoisted(() => vi.fn())
+const paneActions = vi.hoisted(() => ({
+  onSplitRight: vi.fn(() => true),
+  onSplitDown: vi.fn(() => true),
+  canClosePane: true,
+  closeLabel: 'Close Pane',
+  onClosePane: vi.fn()
+}))
+const store = vi.hoisted(() => ({
+  keybindings: {},
+  groupsByWorktree: { 'worktree-1': [{ id: 'group-1' }] }
+}))
 
 vi.mock('@/components/ui/dropdown-menu', () => {
   const Pass = ({ children }: { children?: ReactNode }) => children
@@ -30,8 +42,8 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuTrigger: Pass
   }
 })
-vi.mock('./native-chat-layout-actions', () => ({ runNativeChatSplitTarget: vi.fn() }))
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -40,19 +52,13 @@ vi.mock('@/components/ui/tooltip', () => {
   return { Tooltip: Pass, TooltipTrigger: Pass, TooltipContent: () => null }
 })
 vi.mock('./use-structured-chat-pane-actions', () => ({
-  useStructuredChatPaneActions: () => ({
-    onSplitRight: vi.fn(),
-    onSplitDown: vi.fn(),
-    canClosePane: true,
-    closeLabel: 'Close tab',
-    onClosePane: vi.fn()
-  })
+  useStructuredChatPaneActions: () => paneActions
 }))
 vi.mock('./use-native-chat-tab-owner', () => ({
   useNativeChatTabOwnerWorktreeId: () => 'worktree-1'
 }))
 vi.mock('@/store', () => ({
-  useAppStore: (select: (state: { keybindings: object }) => unknown) => select({ keybindings: {} })
+  useAppStore: (select: (state: typeof store) => unknown) => select(store)
 }))
 vi.mock('../../runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -91,17 +97,39 @@ function StructuredChatTab(): ReactNode {
 describe('a structured chat tab', () => {
   beforeEach(() => {
     items.list = []
+    vi.clearAllMocks()
+    store.groupsByWorktree['worktree-1'] = [{ id: 'group-1' }]
     callRuntimeRpc.mockReset().mockResolvedValue({ orcaSessionId: `orca_session_id:${SESSION}` })
     Object.assign(window, {
       api: { ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) } }
     })
   })
 
-  it("offers Copy Orca Session ID, asking the tab's host for this session's Orca session ID", async () => {
+  it.each([false, true])('uses the header commands with split panes: %s', (split) => {
+    if (split) {
+      store.groupsByWorktree['worktree-1'].push({ id: 'group-2' })
+    }
     const markup = renderToStaticMarkup(<StructuredChatTab />)
+    expect(markup).not.toContain('Move Tab to Split')
+    expect(markup).not.toContain('Resume in New CLI')
+    expect(markup).not.toContain('Continue with Terminal Agent')
+    for (const [label, command] of [
+      ['Split Chat Right', paneActions.onSplitRight],
+      ['Split Chat Down', paneActions.onSplitDown]
+    ] as const) {
+      const item = items.list.find((entry) => childrenText(entry.children).startsWith(label))
+      expect(item).toBeDefined()
+      item?.onSelect?.()
+      expect(command).toHaveBeenCalledOnce()
+    }
+    const close = items.list.find((entry) => childrenText(entry.children) === 'Close Pane')
+    expect(Boolean(close)).toBe(split)
+    close?.onSelect?.()
+    expect(paneActions.onClosePane).toHaveBeenCalledTimes(split ? 1 : 0)
+  })
 
-    expect(markup).toContain('Close tab')
-    expect(markup).not.toContain('Close Pane')
+  it("offers Copy Orca Session ID, asking the tab's host for this session's Orca session ID", async () => {
+    renderToStaticMarkup(<StructuredChatTab />)
 
     const item = items.list.find(
       (candidate) => childrenText(candidate.children) === 'Copy Orca Session ID'

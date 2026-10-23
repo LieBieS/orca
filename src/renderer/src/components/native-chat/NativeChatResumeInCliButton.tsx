@@ -1,16 +1,16 @@
-import { useState } from 'react'
 import { SquareTerminal } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
-import { useTabSessionLaunchActions } from '../tab-bar/use-tab-session-launch-actions'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import {
-  lookupTabSessionHistoryRow,
+  runNativeChatCliFork,
+  useNativeChatCliForkPending
+} from '../tab-bar/native-chat-cli-fork-run'
+import {
   resolveTabSessionHistorySubject,
-  resolveTabSessionSwitch,
+  resolveNativeChatCliForkIdentity,
   type NativeChatTabSession
 } from '../tab-bar/tab-session-history-switch'
 
@@ -22,44 +22,23 @@ export function NativeChatResumeInCliButton({
   tabId: string
   worktreeId: string
   nativeChat: NativeChatTabSession
-}): React.JSX.Element {
-  const [pending, setPending] = useState(false)
-  const launch = useTabSessionLaunchActions(worktreeId)
-  const label = translate(
-    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-    'Resume in New CLI'
+}): React.JSX.Element | null {
+  const tab = { id: tabId, worktreeId }
+  const executionHostScope = useAppStore(
+    (state) =>
+      resolveNativeChatCliForkIdentity(state, { tab, nativeChat })?.executionHostScope ?? null
   )
-  const unavailable = () =>
-    toast.error(
-      translate(
-        'auto.components.right.sidebar.AiVaultPanel.resumeInNewCliUnavailable',
-        'This session cannot be opened in the CLI.'
-      )
-    )
-  const resume = async (): Promise<void> => {
-    const subject = resolveTabSessionHistorySubject(useAppStore.getState(), {
-      tab: { id: tabId, worktreeId },
-      nativeChat
-    })
-    if (!subject) {
-      unavailable()
-      return
-    }
-    const row = await lookupTabSessionHistoryRow(
-      subject,
-      (args) => window.api.aiVault.listSessions(args),
-      {
-        requestToken: createBrowserUuid(),
-        isCancelled: () => false,
-        userRequested: true
-      }
-    )
-    const move = row ? resolveTabSessionSwitch(useAppStore.getState(), row, subject) : null
-    if (row && move?.action === 'resume-in-new-cli') {
-      launch.handleResumeInNewCli(row, move.worktreeId)
-    } else {
-      unavailable()
-    }
+  const pending = useNativeChatCliForkPending(
+    executionHostScope ? { executionHostScope, sessionId: nativeChat.sessionId } : null
+  )
+  const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
+  const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
+  const label = translate(
+    'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+    'Continue with Terminal Agent'
+  )
+  if (!executionHostScope || !agent) {
+    return null
   }
   return (
     <Tooltip>
@@ -70,12 +49,16 @@ export function NativeChatResumeInCliButton({
           size="icon-xs"
           aria-label={label}
           disabled={pending}
+          aria-busy={pending || undefined}
           onClick={(event) => {
             event.stopPropagation()
-            setPending(true)
-            void resume()
-              .catch(unavailable)
-              .finally(() => setPending(false))
+            const subject = resolveTabSessionHistorySubject(useAppStore.getState(), {
+              tab,
+              nativeChat
+            })
+            if (subject?.kind === 'chat') {
+              void runNativeChatCliFork({ subject, tab, agent, commandOverrides })
+            }
           }}
         >
           <SquareTerminal className="size-3" />
