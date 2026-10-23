@@ -1,4 +1,4 @@
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 
 // Why match the text: every host version refuses an undecided `ask` create with exactly this
 // message and the generic runtime_error code, so it is the only stable signal.
