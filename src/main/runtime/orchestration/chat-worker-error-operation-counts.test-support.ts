@@ -4,6 +4,7 @@ import type { AgentSessionJournal } from '../../native-chat/agent-session-journa
 import * as stopProjection from '../../native-chat/agent-session-journal/journal-stop-note-projection'
 import * as lineage from './structured-session-lineage'
 import * as journalPosition from '../../../shared/agent-session-journal-position'
+import * as liveTurn from '../../../shared/structured-agent-session-live-turn'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
@@ -28,6 +29,8 @@ function countedEntries<T>(entries: T[], visit: () => void): T[] {
 
 const emptyCounts = () => ({
   baselineItems: 0,
+  runningTurnScans: 0,
+  runningTurnItems: 0,
   itemLookups: 0,
   bodyLookups: 0,
   submissionsCopied: 0,
@@ -55,6 +58,23 @@ export async function countChatFailureOperations(
   })
   const store = await openTestAgentSessionRecordStore(stateDirectory)
   const counts = emptyCounts()
+  const runningTurns: (string | null)[] = []
+  const runningTurn = liveTurn.runningStructuredAgentSessionTurnItemBySequence
+  vi.spyOn(liveTurn, 'runningStructuredAgentSessionTurnItemBySequence').mockImplementation(
+    (items) => {
+      counts.runningTurnScans++
+      const result = runningTurn({
+        *[Symbol.iterator]() {
+          for (const item of items) {
+            counts.runningTurnItems++
+            yield item
+          }
+        }
+      })
+      runningTurns.push(result?.turnId ?? null)
+      return result
+    }
+  )
   const list = store.listRecords.bind(store)
   vi.spyOn(store, 'listRecords').mockImplementation(() => {
     const records = list()
@@ -113,5 +133,12 @@ export async function countChatFailureOperations(
       submissions: countedEntries(result.submissions, () => counts.wordSubmissionReads++)
     }
   })
-  return { counts, reset: () => Object.assign(counts, emptyCounts()) }
+  return {
+    counts,
+    runningTurns,
+    reset: () => {
+      Object.assign(counts, emptyCounts())
+      runningTurns.length = 0
+    }
+  }
 }

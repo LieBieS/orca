@@ -32,6 +32,12 @@ import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
 import { countChatFailureOperations } from './chat-worker-error-operation-counts.test-support'
+import { settleStructuredAgentSessionChildExit } from '../../native-chat/agent-session-wire/structured-agent-session-child-exit'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 
 const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 const journals = createTrackedJournalOpener()
@@ -146,6 +152,8 @@ it.each([100, 1000])(
     const adoption = { ...ops.counts }
     expect(adoption).toMatchObject({
       baselineItems: 2 * n,
+      runningTurnScans: 0,
+      runningTurnItems: 0,
       itemLookups: 3 * n,
       submissionsCopied: n,
       submissionVisits: n,
@@ -181,6 +189,8 @@ it.each([100, 1000])(
     const incremental = { ...ops.counts }
     expect(incremental).toEqual({
       baselineItems: 0,
+      runningTurnScans: 0,
+      runningTurnItems: 0,
       itemLookups: 30,
       bodyLookups: 10,
       submissionsCopied: 0,
@@ -218,6 +228,8 @@ it.each([100, 1000])(
     expect(r.mail()[0]?.body).toContain('exact eligible error')
     expect(failure).toMatchObject({
       baselineItems: 0,
+      runningTurnScans: 0,
+      runningTurnItems: 0,
       itemLookups: 4,
       bodyLookups: 4,
       submissionsCopied: n + 1,
@@ -240,6 +252,88 @@ it.each([100, 1000])(
     )
   }
 )
+
+it.each([100, 1000])('bounds the native root-end scan with %i saved items', async (n) => {
+  for (const state of ['running', 'completed'] as const) {
+    const r = await rig()
+    r.sessions.delete(SESSION)
+    await batch(
+      r.journal,
+      'saved-native-turns',
+      Array.from({ length: n }, (_, index) =>
+        mutation(`native:${index}`, {
+          kind: 'turn',
+          turnId: `native:${index}`,
+          state: index === n - 1 ? state : 'completed',
+          ...(index === n - 1 && state === 'running' ? {} : { outcome: 'success' })
+        })
+      )
+    )
+    const ops = await countChatFailureOperations(r.journal, r.root, n)
+    r.session.child = { generation: 'native-generation', fence: 0, phase: 'ready' }
+    r.sessions.set(SESSION, r.session)
+    let record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: 0 })
+    )
+    const store = {
+      getRecord: () => record,
+      transitionHandoff: async (
+        _sessionId: string,
+        transition: (current: AgentSessionRecord) => AgentSessionRecord
+      ) => (record = transition(record))
+    }
+    const log = recordingStructuredAgentSessionLogger()
+    const observations: { scans: number; items: number; results: (string | null)[] }[] = []
+    ops.reset()
+    await settleStructuredAgentSessionChildExit(
+      {
+        store,
+        sessions: r.sessions,
+        logger: log.logger,
+        now: () => 1000,
+        serialize: async (_sessionId, task) => task(),
+        flushLifecycle: async () => ({ ok: true }),
+        generationEnded: (sessionId) => {
+          const scans = ops.counts.runningTurnScans
+          const items = ops.counts.runningTurnItems
+          const results = ops.runningTurns.length
+          r.observer.generationEnded(sessionId)
+          observations.push({
+            scans: ops.counts.runningTurnScans - scans,
+            items: ops.counts.runningTurnItems - items,
+            results: ops.runningTurns.slice(results)
+          })
+        }
+      },
+      {
+        type: 'ended',
+        sessionId: SESSION,
+        acquisitionGeneration: 'native-generation',
+        fence: 0,
+        cause: 'unexpected-exit',
+        reason: 'native root exited'
+      }
+    )
+    await tick()
+    process.stdout.write(
+      `NATIVE_END_OPERATIONS ${JSON.stringify({ n, state, observations, counts: ops.counts, logs: log.entries })}\n`
+    )
+    expect(observations).toEqual([
+      { scans: 1, items: n, results: [state === 'running' ? `native:${n - 1}` : null] },
+      { scans: 0, items: 0, results: [] }
+    ])
+    expect(ops.counts.runningTurnScans).toBe(1)
+    expect(ops.counts.runningTurnItems).toBe(n)
+    expect(ops.runningTurns).toEqual([state === 'running' ? `native:${n - 1}` : null])
+    expect(r.session.child).toBeNull()
+    expect(r.session.lastEndedChild).toMatchObject({ cause: 'exit', rootGone: true, fence: 0 })
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+    expect(log.entries).toEqual([])
+    expect(r.mail()).toHaveLength(state === 'running' ? 1 : 0)
+    expect(r.db.getDispatchContextById(r.dispatch().id)?.status).toBe('dispatched')
+    vi.restoreAllMocks()
+  }
+})
 
 function mutation(
   id: string,
