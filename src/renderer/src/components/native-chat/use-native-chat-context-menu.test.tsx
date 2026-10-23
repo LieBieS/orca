@@ -98,15 +98,6 @@ function Harness({
     composerRef: createRef(),
     onSwitchToTerminal,
     showTerminalPaneActions: !structured,
-    chatPaneActions: structured
-      ? {
-          onSplitRight: () => true,
-          onSplitDown: () => true,
-          canClosePane: false,
-          closeLabel: 'Close tab',
-          onClosePane: () => {}
-        }
-      : undefined,
     resolveOrcaSessionId: orcaSessionId === undefined ? undefined : async () => orcaSessionId,
     actions: {
       ...emptyNativeChatContextMenuActions,

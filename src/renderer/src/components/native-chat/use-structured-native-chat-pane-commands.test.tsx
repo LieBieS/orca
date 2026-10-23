@@ -54,9 +54,6 @@ vi.mock('@/components/ui/tooltip', () => {
 vi.mock('./use-structured-chat-pane-actions', () => ({
   useStructuredChatPaneActions: () => paneActions
 }))
-vi.mock('./use-native-chat-tab-owner', () => ({
-  useNativeChatTabOwnerWorktreeId: () => 'worktree-1'
-}))
 vi.mock('@/store', () => ({
   useAppStore: (select: (state: typeof store) => unknown) => select(store)
 }))
@@ -80,9 +77,10 @@ function childrenText(children: ReactNode): string {
     .join('')
 }
 
-function StructuredChatTab(): ReactNode {
+function StructuredChatTab({ owner = 'worktree-1' }: { owner?: string | null }): ReactNode {
   const { menu } = useStructuredNativeChatPaneCommands({
     tabId: 'chat-tab',
+    ownerWorktreeId: owner,
     groupId: 'group-1',
     isVisible: true,
     rootRef: createRef<HTMLDivElement>(),
@@ -126,6 +124,12 @@ describe('a structured chat tab', () => {
     expect(Boolean(close)).toBe(split)
     close?.onSelect?.()
     expect(paneActions.onClosePane).toHaveBeenCalledTimes(split ? 1 : 0)
+  })
+
+  it.each([null, ''])('keeps the session-ID fallback without a known owner: %s', (owner) => {
+    const markup = renderToStaticMarkup(<StructuredChatTab owner={owner} />)
+    expect(markup).not.toContain('Split Chat')
+    expect(markup).toContain('Copy Orca Session ID')
   })
 
   it("offers Copy Orca Session ID, asking the tab's host for this session's Orca session ID", async () => {

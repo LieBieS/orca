@@ -32,7 +32,8 @@ import {
   type NativeChatCopyImage
 } from './native-chat-image-copy'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
-import type { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
+import { useAppStore } from '@/store'
+import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { isEditableTarget } from '@/lib/editable-target'
 import {
   findNativeChatAnswerField,
@@ -78,7 +79,7 @@ type UseNativeChatContextMenuArgs = {
   actions: NativeChatContextMenuActions
   showTerminalPaneActions?: boolean
   splitShortcutLabels?: { right: string; down: string }
-  chatPaneActions?: ReturnType<typeof useStructuredChatPaneActions>
+  chatPane?: { tabId: string; worktreeId: string; groupId: string }
   /** A structured chat tab's Orca session ID; a chat in a terminal pane is that terminal's agent. */
   resolveOrcaSessionId?: () => Promise<string | null>
 } & NativeChatContextMenuTargetArgs
@@ -149,7 +150,7 @@ export function useNativeChatContextMenu({
   actions,
   showTerminalPaneActions = true,
   splitShortcutLabels,
-  chatPaneActions,
+  chatPane,
   resolveOrcaSessionId,
   messageListRef,
   fileLinkContext = null,
@@ -182,10 +183,7 @@ export function useNativeChatContextMenu({
     (target.rewindItemId !== null && rewind !== undefined)
   const hasSessionItems = onFind !== undefined || showTerminalPaneActions
   const hasItems =
-    hasEditItems ||
-    hasSessionItems ||
-    chatPaneActions !== undefined ||
-    resolveOrcaSessionId !== undefined
+    hasEditItems || hasSessionItems || chatPane !== undefined || resolveOrcaSessionId !== undefined
 
   useEffect(() => {
     if (!enabled) {
@@ -322,47 +320,71 @@ export function useNativeChatContextMenu({
               <AgentSessionContextCopyMenuItem onSelect={actions.onCopyAgentSessionContext} />
             </>
           ) : null}
-          {chatPaneActions ? (
-            <>
-              {hasEditItems || hasSessionItems ? <DropdownMenuSeparator /> : null}
-              <DropdownMenuItem onSelect={chatPaneActions.onSplitRight}>
-                <PanelRightClose />
-                {translate(
-                  'auto.components.cmd.j.quick.actions.splitChatRight',
-                  'Split Chat Right'
-                )}
-                <DropdownMenuShortcut>{splitShortcutLabels?.right}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={chatPaneActions.onSplitDown}>
-                <PanelBottomClose />
-                {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
-                <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            </>
+          {chatPane ? (
+            <StructuredChatPaneMenuItems
+              pane={chatPane}
+              leadingSeparator={hasEditItems || hasSessionItems}
+              splitShortcutLabels={splitShortcutLabels}
+              resolveOrcaSessionId={resolveOrcaSessionId}
+            />
           ) : null}
           {showTerminalPaneActions ? (
             <NativeChatPaneMenuItems actions={actions} splitShortcutLabels={splitShortcutLabels} />
-          ) : resolveOrcaSessionId ? (
+          ) : !chatPane && resolveOrcaSessionId ? (
             <>
-              {hasEditItems || hasSessionItems || chatPaneActions ? (
-                <DropdownMenuSeparator />
-              ) : null}
+              {hasEditItems || hasSessionItems ? <DropdownMenuSeparator /> : null}
               <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
-            </>
-          ) : null}
-          {!showTerminalPaneActions && chatPaneActions?.canClosePane ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onSelect={chatPaneActions.onClosePane}>
-                <X />
-                {chatPaneActions.closeLabel}
-              </DropdownMenuItem>
             </>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     )
   }
+}
+
+function StructuredChatPaneMenuItems({
+  pane,
+  leadingSeparator,
+  splitShortcutLabels,
+  resolveOrcaSessionId
+}: Pick<UseNativeChatContextMenuArgs, 'splitShortcutLabels' | 'resolveOrcaSessionId'> & {
+  pane: NonNullable<UseNativeChatContextMenuArgs['chatPane']>
+  leadingSeparator: boolean
+}) {
+  const actions = useStructuredChatPaneActions(pane.tabId, pane.worktreeId, pane.groupId)
+  const hasSplitPanes = useAppStore(
+    (state) => (state.groupsByWorktree[pane.worktreeId]?.length ?? 0) > 1
+  )
+  return (
+    <>
+      {leadingSeparator ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuItem onSelect={actions.onSplitRight}>
+        <PanelRightClose />
+        {translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')}
+        <DropdownMenuShortcut>{splitShortcutLabels?.right}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={actions.onSplitDown}>
+        <PanelBottomClose />
+        {translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down')}
+        <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      {resolveOrcaSessionId ? (
+        <>
+          <DropdownMenuSeparator />
+          <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
+        </>
+      ) : null}
+      {hasSplitPanes && actions.canClosePane ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={actions.onClosePane}>
+            <X />
+            {actions.closeLabel}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  )
 }
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {
