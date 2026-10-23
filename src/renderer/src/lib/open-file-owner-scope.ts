@@ -16,7 +16,7 @@ type OwnerScopedFile = Pick<
 >
 
 /**
- * The workspace an open file's reads, watch and document resources go through. A read-only view
+ * The workspace an open file's reads and watch go through. A read-only view
  * of a file another workspace on its host holds (#32158) lives in one workspace but is scoped to
  * the one that holds the file, derived from the catalog so a restored view needs nothing stored.
  */

@@ -17,7 +17,6 @@ import {
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { openFileOwnerScope } from '@/lib/open-file-owner-scope'
 
 export function useMarkdownPreviewSourceFoundation({
   content,
@@ -76,18 +75,7 @@ export function useMarkdownPreviewSourceFoundation({
       sourceRuntimeEnvironmentId
     })
   )
-  // Why: a read-only view of another workspace's file reads the images beside it through that workspace.
-  const sourceOwnerWorktreeId = useAppStore((s) =>
-    sourceOpenFile ? openFileOwnerScope(sourceOpenFile, s).worktreeId : null
-  )
-  const sourceOwnerRelativePath = useAppStore((s) =>
-    sourceOpenFile ? openFileOwnerScope(sourceOpenFile, s).relativePath : undefined
-  )
-  const resolvedSourceWorktreeId =
-    (sourceOwnerWorktreeId !== sourceOpenFile?.worktreeId ? sourceOwnerWorktreeId : null) ??
-    sourceWorktreeId ??
-    sourceOpenFile?.worktreeId ??
-    null
+  const resolvedSourceWorktreeId = sourceWorktreeId ?? sourceOpenFile?.worktreeId ?? null
   const resolvedSourceRuntimeEnvironmentId =
     sourceRuntimeEnvironmentId !== undefined
       ? sourceRuntimeEnvironmentId
@@ -122,7 +110,7 @@ export function useMarkdownPreviewSourceFoundation({
   const worktreeRoot =
     sourceWorktree?.path ??
     (sourceRoutingWorktreeId
-      ? deriveMarkdownPreviewSourceRoot(filePath, sourceOwnerRelativePath)
+      ? deriveMarkdownPreviewSourceRoot(filePath, sourceOpenFile?.relativePath)
       : null)
   const sourceRelativePath = useMemo(() => {
     if (!sourceWorktree) {
