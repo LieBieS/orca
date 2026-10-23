@@ -258,7 +258,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         if (creatorSettled) {
           db.completeDispatch(parent.id)
         }
-        runtime.setOrchestrationDb(db as never)
+        runtime.setOrchestrationDb(db)
 
         runtime.onPtyExit(WORKER_PTY_ID, 137)
         await settle()

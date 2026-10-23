@@ -66,10 +66,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
 
     // Why the pane key too: a reminted handle no longer matches the row, but the
     // pane identity behind it outlives the remint.
-    const dispatch = this._orchestrationDb.getActiveDispatchForTerminal(
-      handle,
-      paneKey ?? undefined
-    )
+    const dispatch = db.getActiveDispatchForTerminal(handle, paneKey ?? undefined)
     if (!dispatch) {
       return
     }
@@ -77,14 +74,14 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     // settling it as `failed` here made the in-flight worker-stop report its own success as an error.
     // Only a stop begun in THIS runtime can claim the exit; a `stopping` row left durable by a
     // killed process would otherwise absorb a much later crash as a clean stop.
-    const stopping = this._orchestrationDb.getWorkerDispatch?.(dispatch.id)
+    const stopping = db.getWorkerDispatch?.(dispatch.id)
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
-      this._orchestrationDb.settleWorkerStop(dispatch.id)
+      db.settleWorkerStop(dispatch.id)
       return
     }
 
     const errorContext = describeTerminalExitCause(cause)
-    const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
+    const settled = db.failDispatch(dispatch.id, errorContext, {
       workerProcessExited: true,
       terminationReason: cause.kind
     })
@@ -95,7 +92,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     // Why: the coordinator hears about the unexpected exit on its next check cycle, even if the
     // circuit breaker hasn't tripped yet.
     escalateWorkerFailure(
-      this._orchestrationDb,
+      db,
       dispatch,
       {
         from: handle,
